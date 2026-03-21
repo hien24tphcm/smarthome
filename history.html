@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lịch sử - MyHome Dark Mode</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-house-user"></i>
+                <h2>MyHome</h2>
+            </div>
+            <nav class="menu">
+                <a href="index.html"><i class="fa-solid fa-border-all"></i> Tổng quan</a>
+                <a href="history.html" class="active"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử</a>
+                <a href="settings.html"><i class="fa-solid fa-gear"></i> Cài đặt</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <div class="greeting">
+                    <p>Nhật ký hệ thống</p>
+                    <h3>Lịch sử hoạt động</h3>
+                </div>
+                <div class="user-actions">
+                    <div class="notification"><i class="fa-solid fa-bell"></i></div>
+                    <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+                </div>
+            </header>
+
+            <div class="page-content">
+                <div class="timeline-container">
+                    
+                    <div class="timeline-date-badge">Hôm nay</div>
+                    
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-icon"><i class="fa-solid fa-lightbulb"></i></div>
+                            <div class="timeline-content card">
+                                <div class="log-header">
+                                    <h4>Bạn đã bật <strong>Đèn trần Phòng khách</strong></h4>
+                                    <span class="time">14:05</span>
+                                </div>
+                                <p class="log-desc">Phương thức: Điều khiển thủ công qua App</p>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-icon off"><i class="fa-solid fa-fan"></i></div>
+                            <div class="timeline-content card">
+                                <div class="log-header">
+                                    <h4>Bạn đã tắt <strong>Máy lạnh Phòng ngủ</strong></h4>
+                                    <span class="time">12:30</span>
+                                </div>
+                                <p class="log-desc">Phương thức: Điều khiển thủ công qua App</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="timeline-date-badge mt-4">Hôm qua</div>
+                    
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-icon system"><i class="fa-solid fa-moon"></i></div>
+                            <div class="timeline-content card">
+                                <div class="log-header">
+                                    <h4>Hệ thống kích hoạt <strong>Chế độ ban đêm</strong></h4>
+                                    <span class="time">22:00</span>
+                                </div>
+                                <p class="log-desc">Tự động tắt đèn và khóa cửa chính</p>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-icon alert"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div class="timeline-content card alert-border">
+                                <div class="log-header">
+                                    <h4 style="color: var(--danger-color);">Cảnh báo nhiệt độ <strong>Nhà Bếp</strong> vượt ngưỡng!</h4>
+                                    <span class="time">18:45</span>
+                                </div>
+                                <p class="log-desc">Nhiệt độ ghi nhận: 45°C. Đã gửi thông báo đẩy.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

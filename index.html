@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tổng quan - MyHome Dark Mode</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-house-user"></i>
+                <h2>MyHome</h2>
+            </div>
+            <nav class="menu">
+                <a href="index.html" class="active"><i class="fa-solid fa-border-all"></i> Tổng quan</a>
+                <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử</a>
+                <a href="settings.html"><i class="fa-solid fa-gear"></i> Cài đặt</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <div class="greeting">
+                    <p>Chào buổi sáng,</p>
+                    <h3>Nhà của bạn</h3>
+                </div>
+                <div class="user-actions">
+                    <div class="notification has-alert"><i class="fa-solid fa-bell"></i></div>
+                    <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+                </div>
+            </header>
+
+            <div class="page-content">
+                <div class="room-filter-bar">
+                    <button class="filter-btn active" data-filter="all">Tất cả</button>
+                    <button class="filter-btn" data-filter="living-room">Phòng Khách</button>
+                    <button class="filter-btn" data-filter="kitchen">Nhà Bếp</button>
+                    <button class="filter-btn" data-filter="bedroom">Phòng Ngủ</button>
+                </div>
+                
+                <div class="widget-grid" id="device-container">
+                    
+                    <div class="card room-status-card widget-item" data-room="living-room">
+                        <div class="room-info">
+                            <h2>Phòng Khách</h2>
+                            <p class="humidity"><i class="fa-solid fa-droplet"></i> Độ ẩm: 45%</p>
+                        </div>
+                        <div class="temp-ring">
+                            <div class="temp-inner">24&deg;</div>
+                        </div>
+                    </div>
+
+                    <div class="card device-card widget-item" data-room="living-room">
+                        <div class="device-info">
+                            <div class="icon-box"><i class="fa-solid fa-lightbulb"></i></div>
+                            <div class="device-name">Đèn trần <br><small class="text-muted">Phòng khách</small></div>
+                        </div>
+                        <label class="switch"><input type="checkbox" checked><span class="slider round"></span></label>
+                    </div>
+
+                    <div class="card device-card fan-card widget-item" data-room="living-room">
+                        <div class="fan-top-row">
+                            <div class="device-info">
+                                <div class="icon-box"><i class="fa-solid fa-fan"></i></div>
+                                <div class="device-name">Quạt máy<br><small class="text-muted">Phòng khách</small></div>
+                            </div>
+                            <div class="controls-wrapper">
+                                <div class="mode-control">
+                                    <button class="mode-btn">Auto</button>
+                                    <button class="mode-btn active">Thủ công</button>
+                                </div>
+                                <label class="switch"><input type="checkbox" checked><span class="slider round"></span></label>
+                            </div>
+                        </div>
+                        <input type="range" min="0" max="100" value="70" class="range-slider">
+                    </div>
+
+                    <div class="card door-card widget-item" data-room="living-room">
+                        <h2>Cửa chính</h2>
+                        <div class="door-actions">
+                            <button class="door-btn active"><i class="fa-solid fa-lock-open"></i> Mở</button>
+                            <button class="door-btn"><i class="fa-solid fa-lock"></i> Đóng</button>
+                        </div>
+                    </div>
+
+                    <div class="card room-status-card alert-danger widget-item" data-room="kitchen">
+                        <div class="room-info">
+                            <h2>Nhà Bếp</h2>
+                            <p class="humidity" style="color: var(--danger-color);"><i class="fa-solid fa-fire"></i> Vượt ngưỡng!</p>
+                        </div>
+                        <div class="temp-ring" style="background: conic-gradient(var(--danger-color) 0% 100%, transparent 100% 100%); box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);">
+                            <div class="temp-inner" style="color: var(--danger-color);">45&deg;</div>
+                        </div>
+                    </div>
+
+                    <div class="card device-card widget-item" data-room="kitchen">
+                        <div class="device-info">
+                            <div class="icon-box" style="color:var(--danger-color); background: rgba(239, 68, 68, 0.1);"><i class="fa-solid fa-plug"></i></div>
+                            <div class="device-name">Bếp điện <br><small class="text-muted">Nhà bếp</small></div>
+                        </div>
+                        <label class="switch"><input type="checkbox" checked><span class="slider round"></span></label>
+                    </div>
+
+                    <div class="card device-card widget-item" data-room="bedroom">
+                        <div class="device-info">
+                            <div class="icon-box off"><i class="fa-solid fa-lightbulb"></i></div>
+                            <div class="device-name">Đèn ngủ <br><small class="text-muted">Phòng ngủ</small></div>
+                        </div>
+                        <label class="switch"><input type="checkbox"><span class="slider round"></span></label>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const widgetItems = document.querySelectorAll('.widget-item');
+
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const filterValue = btn.getAttribute('data-filter');
+                widgetItems.forEach(item => {
+                    if (filterValue === 'all' || item.getAttribute('data-room') === filterValue) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
