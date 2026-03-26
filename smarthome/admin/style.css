@@ -1,0 +1,250 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg-dark: #0f172a;
+    --card-bg: #1e293b;
+    --primary: #38bdf8;
+    --danger: #f43f5e;
+    --success: #10b981;
+    --text-main: #f1f5f9;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    margin: 0; font-family: sans-serif;
+}
+
+.dashboard-container { display: flex; height: 100vh; }
+
+/* Sidebar */
+.sidebar {
+    width: 260px; background: #1e293b;
+    padding: 20px; border-right: 1px solid rgba(255,255,255,0.1);
+}
+.logo { font-size: 24px; font-weight: bold; margin-bottom: 40px; }
+.logo span { color: var(--primary); }
+.nav-item {
+    display: block; padding: 12px 15px; color: #94a3b8;
+    text-decoration: none; border-radius: 8px; margin-bottom: 5px;
+}
+.nav-item.active, .nav-item:hover {
+    background: rgba(56, 189, 248, 0.1); color: var(--primary);
+}
+
+/* Main Panel */
+.main-panel { flex: 1; overflow-y: auto; }
+.top-header {
+    height: 70px; background: #1e293b; display: flex;
+    align-items: center; justify-content: space-between;
+    padding: 0 30px; border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Module Sections */
+.module-section { padding: 30px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.section-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+
+/* Sensor Cards (M1) */
+.sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+.sensor-card {
+    background: var(--card-bg); padding: 25px; border-radius: 15px;
+    display: flex; align-items: center; gap: 20px;
+    border-left: 4px solid var(--primary);
+}
+.sensor-card i { font-size: 2.5rem; color: var(--primary); }
+.value { font-size: 2rem; font-weight: bold; }
+
+/* Table (M2 & M4) */
+.config-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 10px; overflow: hidden; }
+.config-table th, .config-table td { padding: 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.config-table th { background: rgba(0,0,0,0.2); color: #94a3b8; }
+
+/* M3: Schedule Item */
+.schedule-item {
+    background: var(--card-bg); padding: 15px 20px;
+    border-radius: 10px; display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 10px;
+}
+
+/* Buttons */
+.btn-primary { background: var(--primary); border: none; padding: 10px 20px; border-radius: 5px; color: #fff; cursor: pointer; }
+.btn-export { background: #6366f1; border: none; padding: 10px 20px; border-radius: 5px; color: #fff; cursor: pointer; }
+
+/* Ẩn tất cả các trang */
+.page {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Chỉ hiển thị trang active */
+.page.active {
+    display: block;
+}
+
+/* Hiệu ứng chuyển trang mượt mà */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header Section Style */
+.page h2 {
+    margin-bottom: 20px;
+    color: var(--primary);
+    border-bottom: 2px solid rgba(56, 189, 248, 0.2);
+    padding-bottom: 10px;
+}
+/* Container bọc ngoài bảng để tạo khoảng cách */
+.table-container {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 20px;
+}
+
+/* Style cho bảng */
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #cbd5e1;
+    font-size: 0.95rem;
+}
+
+/* Tiêu đề cột */
+.log-table th {
+    text-align: left;
+    padding: 12px 15px;
+    color: #38bdf8; /* Màu xanh neon cho tiêu đề */
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    border-bottom: 2px solid rgba(56, 189, 248, 0.2);
+}
+
+/* Nội dung từng dòng */
+.log-table td {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Hiệu ứng hover cho dòng */
+.log-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Trang trí cho cột Hành động (Bật/Tắt) */
+.action-on {
+    color: #4ade80; /* Xanh lá */
+    font-weight: bold;
+}
+.action-off {
+    color: #fb7185; /* Đỏ hồng */
+    font-weight: bold;
+}
+
+/* Badge cho người dùng */
+.user-badge {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+/* Layout chung cho trang Login */
+.login-page {
+    background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.login-card {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    width: 350px;
+    text-align: center;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+}
+
+.login-header i { font-size: 3rem; color: #38bdf8; margin-bottom: 10px; }
+.login-header h2 span { color: #38bdf8; }
+.login-header p { color: #94a3b8; font-size: 0.85rem; margin-bottom: 25px; }
+
+* Điều chỉnh lại phần input-wrapper để chứa input gọn gàng */
+.input-group {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.input-wrapper {
+    position: relative;
+    width: 100%; /* Đảm bảo wrapper không to hơn card */
+}
+
+.input-wrapper input {
+    width: 100%; /* Bây giờ 100% đã nằm gọn bên trong nhờ box-sizing */
+    padding: 12px 12px 12px 45px; /* Giữ chỗ cho icon bên trái */
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #fff;
+    outline: none;
+    display: block; /* Đảm bảo input chiếm hết chiều ngang */
+}
+
+.input-group i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #38bdf8;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 15px 12px 45px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    color: #fff;
+    outline: none;
+}
+
+.btn-login {
+    width: 100%;
+    padding: 12px;
+    background: #38bdf8;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-login:hover { background: #0ea5e9; transform: translateY(-2px); }
+
+.error-text {
+    color: #fb7185;
+    font-size: 0.8rem;
+    margin-top: 15px;
+    display: none;
+}
+
+/* Sidebar Logout Red Color */
+.nav-item.logout:hover {
+    color: #fb7185 !important;
+    background: rgba(251, 113, 133, 0.1) !important;
+}
