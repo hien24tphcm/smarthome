@@ -9,7 +9,6 @@
 </head>
 <body>
     <div class="dashboard-container">
-        
         <aside class="sidebar">
             <div class="logo">
                 <i class="fa-solid fa-house-user"></i>
@@ -43,7 +42,6 @@
                 </div>
                 
                 <div class="widget-grid" id="device-container">
-                    
                     <div class="card room-status-card widget-item" data-room="living-room">
                         <div class="room-info">
                             <h2>Phòng Khách</h2>
@@ -70,13 +68,13 @@
                             </div>
                             <div class="controls-wrapper">
                                 <div class="mode-control">
-                                    <button class="mode-btn">Auto</button>
-                                    <button class="mode-btn active">Thủ công</button>
+                                    <button class="mode-btn " data-mode="auto">Auto</button>
+                                    <button class="mode-btn active" data-mode="manual">Thủ công</button>
                                 </div>
-                                <label class="switch"><input type="checkbox" checked><span class="slider round"></span></label>
+                                <label class="switch"><input type="checkbox" id="fan-switch"><span class="slider round"></span></label>
                             </div>
                         </div>
-                        <input type="range" min="0" max="100" value="70" class="range-slider">
+                        <input type="range" min="0" max="100" value="70" class="range-slider" id="fan-slider">
                     </div>
 
                     <div class="card door-card widget-item" data-room="living-room">
@@ -92,50 +90,159 @@
                             <h2>Nhà Bếp</h2>
                             <p class="humidity" style="color: var(--danger-color);"><i class="fa-solid fa-fire"></i> Vượt ngưỡng!</p>
                         </div>
-                        <div class="temp-ring" style="background: conic-gradient(var(--danger-color) 0% 100%, transparent 100% 100%); box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);">
+                        <div class="temp-ring" style="background: conic-gradient(var(--danger-color) 0% 100%, transparent 100% 100%);">
                             <div class="temp-inner" style="color: var(--danger-color);">45&deg;</div>
                         </div>
                     </div>
-
-                    <div class="card device-card widget-item" data-room="kitchen">
-                        <div class="device-info">
-                            <div class="icon-box" style="color:var(--danger-color); background: rgba(239, 68, 68, 0.1);"><i class="fa-solid fa-plug"></i></div>
-                            <div class="device-name">Bếp điện <br><small class="text-muted">Nhà bếp</small></div>
-                        </div>
-                        <label class="switch"><input type="checkbox" checked><span class="slider round"></span></label>
-                    </div>
-
-                    <div class="card device-card widget-item" data-room="bedroom">
-                        <div class="device-info">
-                            <div class="icon-box off"><i class="fa-solid fa-lightbulb"></i></div>
-                            <div class="device-name">Đèn ngủ <br><small class="text-muted">Phòng ngủ</small></div>
-                        </div>
-                        <label class="switch"><input type="checkbox"><span class="slider round"></span></label>
-                    </div>
-
                 </div>
             </div>
         </main>
     </div>
+<script src="api.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const deviceContainer = document.getElementById('device-container');
 
-    <script>
+    // --- 1. HÀM RENDER THIẾT BỊ ---
+    async function loadDashboard() {
+        try {
+            const devices = await API.getDevices();
+            if (!devices || devices.length === 0) {
+                deviceContainer.innerHTML = '<p>Không tìm thấy thiết bị nào.</p>';
+                return;
+            }
+
+            deviceContainer.innerHTML = ''; // Xóa trạng thái loading
+
+            devices.forEach(device => {
+                if (device.type === 'controller') {
+                    // Nếu là Quạt (hoặc thiết bị có điều tốc)
+                    if (device.name.toLowerCase().includes('quạt')) {
+                        renderFanCard(device);
+                    } else {
+                        renderLightCard(device);
+                    }
+                } else if (device.type === 'sensor') {
+                    renderSensorCard(device);
+                }
+            });
+            
+            setupFilters(); // Cài đặt lại bộ lọc sau khi render xong
+        } catch (err) {
+            deviceContainer.innerHTML = '<p>Lỗi kết nối Backend. Vui lòng đăng nhập lại.</p>';
+        }
+    }
+
+    // --- 2. CÁC TEMPLATE WIDGET ---
+    
+    // Template Đèn / Công tắc đơn
+    function renderLightCard(device) {
+        const card = document.createElement('div');
+        card.className = 'card device-card widget-item';
+        card.setAttribute('data-room', 'living-room'); // Bạn có thể map từ device.zone_id nếu BE trả về
+        
+        card.innerHTML = `
+            <div class="device-info">
+                <div class="icon-box"><i class="fa-solid fa-lightbulb"></i></div>
+                <div class="device-name">${device.name}<br><small class="text-muted">ID: ${device.id}</small></div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" class="toggle-btn" data-id="${device.id}" ${device.last_value == '1' ? 'checked' : ''}>
+                <span class="slider round"></span>
+            </label>
+        `;
+        
+        // Sự kiện Bật/Tắt
+        card.querySelector('.toggle-btn').addEventListener('change', async (e) => {
+            const action = e.target.checked ? 'on' : 'off';
+            await API.toggleDevice(device.id, action);
+        });
+
+        deviceContainer.appendChild(card);
+    }
+
+    // Template Quạt (Có Mode và Speed)
+    function renderFanCard(device) {
+        const card = document.createElement('div');
+        card.className = 'card device-card fan-card widget-item';
+        card.innerHTML = `
+            <div class="fan-top-row">
+                <div class="device-info">
+                    <div class="icon-box"><i class="fa-solid fa-fan"></i></div>
+                    <div class="device-name">${device.name}</div>
+                </div>
+                <div class="controls-wrapper">
+                    <div class="mode-control">
+                        <button class="mode-btn ${device.mode === 'auto' ? 'active' : ''}" data-id="${device.id}" data-mode="auto">Auto</button>
+                        <button class="mode-btn ${device.mode === 'manual' ? 'active' : ''}" data-id="${device.id}" data-mode="manual">Thủ công</button>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" class="fan-switch" data-id="${device.id}" ${device.last_value > 0 ? 'checked' : ''}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            <input type="range" min="0" max="100" value="${device.speed || 0}" class="range-slider fan-slider" data-id="${device.id}">
+        `;
+
+        // Logic điều khiển Mode
+        card.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const mode = btn.dataset.mode;
+                const success = await API.updateDeviceMode(device.id, mode);
+                if (success) {
+                    card.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    // Vô hiệu hóa slider nếu là Auto
+                    card.querySelector('.fan-slider').disabled = (mode === 'auto');
+                }
+            });
+        });
+
+        // Logic Slider Tốc độ
+        card.querySelector('.fan-slider').addEventListener('change', async (e) => {
+            await API.setDeviceSpeed(device.id, e.target.value);
+        });
+
+        deviceContainer.appendChild(card);
+    }
+
+    // Template Cảm biến (Nhiệt độ/Độ ẩm)
+    function renderSensorCard(device) {
+        const card = document.createElement('div');
+        card.className = 'card room-status-card widget-item';
+        card.innerHTML = `
+            <div class="room-info">
+                <h2>${device.name}</h2>
+                <p class="humidity"><i class="fa-solid fa-clock"></i> Cập nhật: vừa xong</p>
+            </div>
+            <div class="temp-ring">
+                <div class="temp-inner">${device.last_value || 0}&deg;</div>
+            </div>
+        `;
+        deviceContainer.appendChild(card);
+    }
+
+    // --- 3. LOGIC LỌC PHÒNG (SETUP SAU KHI LOAD) ---
+    function setupFilters() {
         const filterBtns = document.querySelectorAll('.filter-btn');
         const widgetItems = document.querySelectorAll('.widget-item');
 
         filterBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.onclick = () => {
                 filterBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                const filterValue = btn.getAttribute('data-filter');
+                const filter = btn.dataset.filter;
                 widgetItems.forEach(item => {
-                    if (filterValue === 'all' || item.getAttribute('data-room') === filterValue) {
-                        item.style.display = 'flex';
-                    } else {
-                        item.style.display = 'none';
-                    }
+                    item.style.display = (filter === 'all' || item.dataset.room === filter) ? 'flex' : 'none';
                 });
-            });
+            };
         });
-    </script>
+    }
+
+    // Khởi tạo
+    loadDashboard();
+});
+</script>
 </body>
 </html>

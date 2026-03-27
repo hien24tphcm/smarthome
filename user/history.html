@@ -93,5 +93,72 @@
             </div>
         </main>
     </div>
+    <div class="page-content">
+    <div class="timeline-container" id="log-display-area">
+        <div class="loading-text" style="text-align: center; color: var(--text-secondary);">
+            <i class="fas fa-spinner fa-spin"></i> Đang tải nhật ký hệ thống...
+        </div>
+    </div>
+</div>
+
+    <script src="api.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const logContainer = document.getElementById('log-display-area');
+
+        async function loadSystemHistory() {
+            // 1. Gọi API từ endpoint /api/v1/logs (Sử dụng hàm sendRequest trong api.js của bạn)
+            // Dựa trên tài liệu của bạn, đây là kết quả của lệnh LEFT JOIN phức tạp
+            const logs = await API.getLogs(); 
+
+            if (logs && logs.length > 0) {
+                logContainer.innerHTML = ''; // Xóa dòng "Loading..."
+
+                // Group logs theo ngày (tùy chọn để hiển thị đẹp hơn)
+                const timeline = document.createElement('div');
+                timeline.className = 'timeline';
+
+            // Trong hàm loadSystemHistory()
+            logs.forEach(log => {
+                // BE trả về 'description' chứ không phải 'message'
+                // BE trả về 'created_at' chứ không phải 'timestamp'
+                const logItem = `
+                    <div class="timeline-item">
+                        <div class="timeline-icon ${log.log_type || 'system'}">
+                            <i class="fa-solid fa-circle-info"></i>
+                        </div>
+                        <div class="timeline-content card">
+                            <div class="log-header">
+                                <h4>${log.description}</h4> 
+                                <span class="time">${formatTime(log.created_at)}</span>
+                            </div>
+                            <p class="log-desc">Hệ thống MyHome</p>
+                        </div>
+                    </div>
+                `;
+                timeline.innerHTML += logItem;
+            });
+                logContainer.appendChild(timeline);
+            } else {
+                logContainer.innerHTML = '<p style="text-align:center;">Không có lịch sử hoạt động.</p>';
+            }
+        }
+
+        // Hàm chọn Icon dựa trên Category từ DB (sensors/controllers)
+        function getIconByDevice(category) {
+            if (category === 'sensors') return 'fa-solid fa-microchip';
+            if (category === 'controllers') return 'fa-solid fa-toggle-on';
+            return 'fa-solid fa-clock-rotate-left';
+        }
+
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Khởi chạy
+        loadSystemHistory();
+    });
+    </script>
 </body>
 </html>
