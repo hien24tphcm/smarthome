@@ -248,3 +248,13 @@ body {
     color: #fb7185 !important;
     background: rgba(251, 113, 133, 0.1) !important;
 }
+
+#btn-logout {
+    margin-left: 10px;
+    padding: 5px 10px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}

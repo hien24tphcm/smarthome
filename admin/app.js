@@ -1,6 +1,11 @@
 async function loadDevices() {
     const token = localStorage.getItem("token");
 
+    if (!token) {
+        window.location.href = "login.html";
+        return;
+    }
+
     const res = await fetch("http://localhost:8000/api/v1/devices", {
         headers: {
             Authorization: "Bearer " + token
@@ -10,7 +15,39 @@ async function loadDevices() {
     const devices = await res.json();
     console.log(devices);
 
-    // TODO: gắn vào UI
+    const container = document.querySelector('.device-grid');
+
+    if (!container) return;
+
+    container.innerHTML = ""; // clear cũ
+
+    devices.forEach(device => {
+        const div = document.createElement('div');
+        div.className = "device-card";
+
+        div.innerHTML = `
+            <h3>${device.name}</h3>
+            <p>${device.feed_id}</p>
+            <button onclick="toggleDevice('${device.id}')">Toggle</button>
+        `;
+
+        container.appendChild(div);
+    });
+}
+
+async function toggleDevice(device_id, currentStatus) {
+    const token = localStorage.getItem("token");
+
+    const action = currentStatus === "ON" ? "off" : "on";
+
+    await fetch(`http://localhost:8000/api/v1/devices/${device_id}/toggle`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({ action })
+    });
 }
 // ==========================================
 // 1. XỬ LÝ ĐIỀU HƯỚNG SIDEBAR (Chuyển trang)
@@ -61,12 +98,14 @@ setInterval(updateRealtimeData, 3000);
 // 3. MODULE 2: KIỂM TRA NGƯỠNG & CẢNH BÁO
 // ==========================================
 function checkThresholds(currentTemp) {
-    const limit = 25.5; // Giả sử ngưỡng lấy từ PostgreSQL
     const tempCard = document.querySelector('.sensor-card.temperature');
-    
+
+    if (!tempCard) return; // 🔥 FIX crash
+
+    const limit = 25.5;
+
     if (currentTemp > limit) {
-        tempCard.classList.add('warning'); // Thêm CSS để nháy đỏ
-        console.warn("Cảnh báo: Nhiệt độ vượt ngưỡng!");
+        tempCard.classList.add('warning');
     } else {
         tempCard.classList.remove('warning');
     }
@@ -76,7 +115,11 @@ function checkThresholds(currentTemp) {
 // 4. MODULE 5: VẼ BIỂU ĐỒ (Dùng Chart.js)
 // ==========================================
 function initChart() {
-    const ctx = document.getElementById('mainChart').getContext('2d');
+    const canvas = document.getElementById('mainChart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+
     new Chart(ctx, {
         type: 'line',
         data: {

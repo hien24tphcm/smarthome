@@ -11,7 +11,7 @@
   <script>
     // Kiểm tra nếu chưa đăng nhập thì đá về trang login
     if (!localStorage.getItem('token')) {
-        window.location.href = "login.html";
+        window.location.href = "../auth/login.html";
     }
   </script>
     <div class="dashboard-container">
@@ -27,15 +27,18 @@
         </aside>
 
         <main class="main-panel">
-          <header class="top-header">
-              <h1 id="page-title">Trang chủ</h1>
-              <div class="user-profile">Admin <i class="fas fa-user-circle"></i></div>
-          </header>
+            <header class="top-header">
+                <h1 id="page-title">Trang chủ</h1>
+                <div class="user-profile">
+                    Admin <i class="fas fa-user-circle"></i>
+                    <button id="btn-logout">Logout</button>
+                </div>
+            </header>
       
           <div class="content-area">
               <section id="page-dashboard" class="page active">
                   <div class="sensor-grid">
-                      <div class="sensor-card">
+                      <div class="sensor-card temperature">
                           <i class="fas fa-thermometer-half"></i>
                           <div class="info"><h3>Nhiệt độ</h3><p class="value" id="temp-val">25°C</p></div>
                       </div>
@@ -122,7 +125,7 @@
       // Xử lý đăng xuất
       document.getElementById('btn-logout').addEventListener('click', function() {
           localStorage.removeItem('isLoggedIn');
-          window.location.href = "login.html";
+          window.location.href = "../auth/login.html";
       });
   </script>
 </body>

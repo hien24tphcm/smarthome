@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Đăng nhập - SmartHome System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="auth.css">
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <div class="login-header">
+            <i class="fas fa-house-user"></i>
+            <h2>SMART<span>HOME</span></h2>
+            <p>Vui lòng đăng nhập để tiếp tục</p>
+        </div>
+        <form id="login-form">
+            <div class="input-group">
+                <i class="fas fa-user"></i>
+                <input type="text" id="username" placeholder="Tên đăng nhập" required>
+            </div>
+            <div class="input-group">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="password" placeholder="Mật khẩu" required>
+            </div>
+            <button type="submit" class="btn-login">ĐĂNG NHẬP</button>
+            <p id="error-msg" class="error-text">Tài khoản hoặc mật khẩu không đúng!</p>
+        </form>
+    </div>
+        <script src="login.js?v=999"></script>
+</body>
+</html>
