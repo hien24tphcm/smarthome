@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>SmartHome Admin - Hệ thống quản lý tập trung</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./style.css">
     <script src="https://kit.fontawesome.com/a076d05399.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -47,7 +47,26 @@
                           <div class="info"><h3>Độ ẩm</h3><p class="value" id="humi-val">60%</p></div>
                       </div>
                   </div>
-                  <div class="device-grid">...</div>
+                  <!-- NÚT THÊM -->
+                    <button onclick="showAddDeviceForm()" class="btn-add">
+                        + Thêm thiết bị
+                    </button>
+
+                    <!--  FORM -->
+                    <div id="add-device-form" style="display:none; margin:10px 0;">
+                        <input type="text" id="device-name" placeholder="Tên thiết bị">
+                        <input type="text" id="device-feed" placeholder="Feed ID">
+                        
+                        <select id="device-type">
+                            <option value="controller">Controller</option>
+                            <option value="sensor">Sensor</option>
+                        </select>
+
+                        <button onclick="addDevice()">Lưu</button>
+                    </div>
+
+                    <!--  DEVICE LIST -->
+                    <div class="device-grid"></div>
               </section>
       
               <section id="page-thresholds" class="page">

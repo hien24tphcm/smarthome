@@ -6,7 +6,7 @@ async function loadDevices() {
         return;
     }
 
-    const res = await fetch("http://localhost:8000/api/v1/devices", {
+    const res = await fetch("http://localhost:8000/api/v1/devices/", {
         headers: {
             Authorization: "Bearer " + token
         }
@@ -22,32 +22,185 @@ async function loadDevices() {
     container.innerHTML = ""; // clear cũ
 
     devices.forEach(device => {
+
+        if (device.feed_id.includes("temp") && device.value != null) {
+            temp = device.value;
+        }
+    
+        if (device.feed_id.includes("humi") && device.value != null) {
+            humi = device.value;
+        }
+
         const div = document.createElement('div');
         div.className = "device-card";
+        div.setAttribute("data-id", device.id);
 
         div.innerHTML = `
             <h3>${device.name}</h3>
             <p>${device.feed_id}</p>
-            <button onclick="toggleDevice('${device.id}')">Toggle</button>
+
+            ${device.value !== null ? `
+                <p class="sensor-value">
+                    ${device.name.includes("temp") ? "🌡" : "💧"}
+                    ${device.value}
+                    ${device.name.includes("temp") ? "°C" : "%"}
+                </p>
+            ` : ""}
+
+            <p class="device-status ${device.status === "ON" ? "status-on" : "status-off"}">
+                ${device.status}
+            </p>
+
+            <div class="device-actions">
+                <button class="btn-toggle" onclick="toggleDevice('${device.id}', '${device.status}')">
+                    ${device.status === "ON" ? "Tắt" : "Bật"}
+                </button>
+
+                <button class="btn-delete" onclick="deleteDevice(${device.id})">
+                    Xoá
+                </button>
+            </div>
         `;
 
         container.appendChild(div);
     });
+
+    const tempElement = document.getElementById("temp-val");
+    const humiElement = document.getElementById("humi-val");
+
+    if (tempElement && temp != null) {
+        tempElement.innerText = temp + "°C";
+    }
+
+    if (humiElement && humi != null) {
+        humiElement.innerText = humi + "%";
+    }
 }
 
-async function toggleDevice(device_id, currentStatus) {
+async function toggleDevice(device_id) {
     const token = localStorage.getItem("token");
 
-    const action = currentStatus === "ON" ? "off" : "on";
+    try {
+        //  lấy đúng card
+        const card = document.querySelector(
+            `.device-card[data-id="${device_id}"]`
+        );
 
-    await fetch(`http://localhost:8000/api/v1/devices/${device_id}/toggle`, {
+        if (!card) {
+            console.error("Không tìm thấy device card");
+            return;
+        }
+
+        //  lấy status từ UI
+        const statusElement = card.querySelector(".device-status");
+
+        if (!statusElement) {
+            console.error("Không tìm thấy status element");
+            return;
+        }
+
+        const currentStatus = statusElement.innerText.trim();
+
+        //  xác định action
+        const action = currentStatus === "ON" ? "off" : "on";
+
+        //  gọi API
+        const res = await fetch(`http://localhost:8000/api/v1/devices/${device_id}/toggle`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token
+            },
+            body: JSON.stringify({ action })
+        });
+
+        if (!res.ok) {
+            console.error("Toggle thất bại");
+            return;
+        }
+
+        // 🔥 update UI ngay (không cần đợi reload)
+        const newStatus = currentStatus === "ON" ? "OFF" : "ON";
+        statusElement.innerText = newStatus;
+
+        // đổi màu
+        statusElement.classList.remove("status-on", "status-off");
+        statusElement.classList.add(newStatus === "ON" ? "status-on" : "status-off");
+
+        // 🔥 đổi text nút
+        const btn = card.querySelector(".btn-toggle");
+        if (btn) {
+            btn.innerText = newStatus === "ON" ? "Tắt" : "Bật";
+        }
+
+    } catch (err) {
+        console.error("Lỗi toggle:", err);
+    }
+    loadDevices();
+}
+function showAddDeviceForm() {
+    const form = document.getElementById("add-device-form");
+    form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function addDevice() {
+    const token = localStorage.getItem("token");
+
+    const nameInput = document.getElementById("device-name");
+    const feedInput = document.getElementById("device-feed");
+    const typeInput = document.getElementById("device-type");
+
+    // ✅ check null tránh crash
+    if (!nameInput || !feedInput || !typeInput) {
+        alert("Không tìm thấy input (sai id)");
+        return;
+    }
+
+    const name = nameInput.value;
+    const feed_id = feedInput.value;
+    const type = typeInput.value;
+
+    if (!name || !feed_id) {
+        alert("Nhập đầy đủ!");
+        return;
+    }
+
+    await fetch("http://localhost:8000/api/v1/devices/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             Authorization: "Bearer " + token
         },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({
+            name,
+            feed_id,
+            zone_id: 1,
+            type
+        })
     });
+
+    loadDevices();
+}
+async function deleteDevice(device_id) {
+    const token = localStorage.getItem("token");
+
+    const confirmDelete = confirm("Bạn có chắc muốn xoá thiết bị này?");
+    if (!confirmDelete) return;
+
+    const res = await fetch(`http://localhost:8000/api/v1/devices/${device_id}/`, {
+        method: "DELETE",
+        headers: {
+            Authorization: "Bearer " + token
+        }
+    });
+
+    if (res.ok) {
+        alert("Xoá thành công!");
+        loadDevices(); // reload lại danh sách
+    } else {
+        alert("Xoá thất bại!");
+        console.log(await res.text());
+    }
 }
 // ==========================================
 // 1. XỬ LÝ ĐIỀU HƯỚNG SIDEBAR (Chuyển trang)
@@ -75,32 +228,12 @@ navItems.forEach(item => {
 });
 
 // ==========================================
-// 2. MODULE 1: CẬP NHẬT THỜI GIAN THỰC (Real-time)
-// ==========================================
-function updateRealtimeData() {
-    // Giả lập lấy dữ liệu từ Redis/Adafruit IO
-    const mockTemp = (24 + Math.random() * 2).toFixed(1);
-    const mockHumi = (60 + Math.random() * 5).toFixed(0);
-
-    const tempElement = document.getElementById('temp-val');
-    const humiElement = document.getElementById('humi-val');
-
-    if(tempElement) tempElement.innerText = mockTemp + "°C";
-    if(humiElement) humiElement.innerText = mockHumi + "%";
-
-    // Kiểm tra ngưỡng (Module 2)
-    checkThresholds(mockTemp);
-}
-// Chạy cập nhật mỗi 3 giây
-setInterval(updateRealtimeData, 3000);
-
-// ==========================================
 // 3. MODULE 2: KIỂM TRA NGƯỠNG & CẢNH BÁO
 // ==========================================
 function checkThresholds(currentTemp) {
     const tempCard = document.querySelector('.sensor-card.temperature');
 
-    if (!tempCard) return; // 🔥 FIX crash
+    if (!tempCard) return; 
 
     const limit = 25.5;
 
@@ -139,3 +272,4 @@ window.onload = () => {
     initChart();
     loadDevices();
 };
+setInterval(loadDevices, 3000);
