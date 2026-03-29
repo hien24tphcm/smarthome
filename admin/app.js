@@ -119,15 +119,12 @@ async function toggleDevice(device_id) {
             return;
         }
 
-        // 🔥 update UI ngay (không cần đợi reload)
         const newStatus = currentStatus === "ON" ? "OFF" : "ON";
         statusElement.innerText = newStatus;
 
-        // đổi màu
         statusElement.classList.remove("status-on", "status-off");
         statusElement.classList.add(newStatus === "ON" ? "status-on" : "status-off");
 
-        // 🔥 đổi text nút
         const btn = card.querySelector(".btn-toggle");
         if (btn) {
             btn.innerText = newStatus === "ON" ? "Tắt" : "Bật";
@@ -150,7 +147,7 @@ async function addDevice() {
     const feedInput = document.getElementById("device-feed");
     const typeInput = document.getElementById("device-type");
 
-    // ✅ check null tránh crash
+    // check null 
     if (!nameInput || !feedInput || !typeInput) {
         alert("Không tìm thấy input (sai id)");
         return;
