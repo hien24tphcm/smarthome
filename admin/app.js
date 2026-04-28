@@ -1,6 +1,5 @@
 // ============================================================
-// SmartHome Admin – Frontend logic
-// Backend: FastAPI (xem openapi.json)
+// SmartHome Admin 
 // ============================================================
 const API = "http://localhost:8000/api/v1";
 const POLL_INTERVAL_MS = 7000; // tự cập nhật sensor mỗi 7s
@@ -41,7 +40,7 @@ function showToast(message, type = "info") {
     }, 3200);
 }
 
-/** Đoán icon + đơn vị từ tên / feed_id của thiết bị */
+/**  icon + đơn vị  */
 function detectSensorMeta(device) {
     const key = (device.name + " " + device.feed_id).toLowerCase();
 
@@ -60,7 +59,7 @@ function detectSensorMeta(device) {
     return { icon: "fa-microchip", unit: "", label: "Cảm biến" };
 }
 
-/** Đoán icon controller */
+/* icon  */
 function detectControllerIcon(device) {
     const key = (device.name + " " + device.feed_id).toLowerCase();
     if (/(light|lamp|led|bulb|đèn|den)/.test(key))    return "fa-lightbulb";
@@ -136,7 +135,6 @@ async function loadDevices() {
 
 // ============================================================
 // FETCH LOGS
-// GET /api/v1/logs/
 // ============================================================
 async function fetchLogs() {
     const tableBody = document.getElementById("log-table-body");
@@ -333,7 +331,7 @@ function renderControllers(controllers) {
 }
 
 // ============================================================
-// TOGGLE DEVICE (UPDATE)  →  POST /devices/{id}/toggle?action=on|off
+// TOGGLE DEVICE 
 // ============================================================
 async function toggleDevice(deviceId, checkboxEl) {
     const action = checkboxEl.checked ? "on" : "off";
@@ -496,16 +494,12 @@ async function deleteDevice(deviceId, deviceName = "") {
 
 // ============================================================
 // THRESHOLDS MODULE
-// Backend schema: ThresholdCreate / ThresholdResponse
-// POST /api/v1/settings/thresholds
-// theo schema setting.py :contentReference[oaicite:0]{index=0}
 // ============================================================
 
 let allDevicesCache = [];
 
 /**
  * Load sensor + controller vào select box
- * Dữ liệu lấy từ /devices/ theo DeviceResponse schema :contentReference[oaicite:1]{index=1}
  */
 async function loadThresholdDevices() {
     try {
@@ -562,19 +556,8 @@ async function loadThresholdDevices() {
 }
 
 
-/**
+/*
  * Lưu threshold mới
- * POST /api/v1/settings/thresholds
- * schema:
- * {
- *   name,
- *   action,
- *   value,
- *   condition,
- *   target_device_id,
- *   type: "threshold"
- * }
- * theo openapi + setting.py :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3}
  */
 // thêm vào bên trong saveThreshold()
 
@@ -602,9 +585,6 @@ async function saveThreshold() {
     };
 
     try {
-        // =====================================
-        // BƯỚC 1: TẠO THRESHOLD
-        // =====================================
         const res = await fetch(`${API}/settings/thresholds`, {
             method: "POST",
             headers: authHeaders({
@@ -632,9 +612,7 @@ async function saveThreshold() {
         console.log("SETTING ID =", settingId);
         console.log("SENSOR ID =", sensorId);
 
-        // =====================================
-        // BƯỚC 2: APPLY THRESHOLD VÀO SENSOR
-        // =====================================
+
         const applyRes = await fetch(
             `${API}/settings/${settingId}/apply/${sensorId}`,
             {
@@ -750,7 +728,6 @@ async function deleteThreshold(settingId) {
     if (!confirm("Bạn có chắc muốn xóa ngưỡng này?")) return;
 
     try {
-        // backend DELETE là /settings/{id}
         const res = await fetch(
             `${API}/settings/${settingId}`,
             {
@@ -812,7 +789,6 @@ function formatTimestamp(timestamp) {
 
     const date = new Date(timestamp);
 
-    // cộng thêm 7 tiếng VN
     date.setHours(date.getHours() + 7);
 
     const hh = String(date.getHours()).padStart(2, "0");
@@ -825,15 +801,12 @@ function formatTimestamp(timestamp) {
     return `${hh}:${mm}:${ss} ${dd}/${MM}`;
 }
 
-// ============================================================
-// CHART
-// ============================================================
-// ============================================================
+
+
 // REPORTS - CHART NHIỆT ĐỘ / ĐỘ ẨM
-// ============================================================
 let mainChartInstance = null;
 
-/** Tìm sensor theo tên/feed */
+/** Tìm sensor  */
 function findSensorByKeyword(devices, keywords = []) {
     return devices.find(device => {
         if ((device.type || "").toLowerCase() !== "sensor") return false;
@@ -872,7 +845,6 @@ async function loadReportChart() {
     if (!canvas) return;
 
     try {
-        // B1: lấy danh sách devices
         const res = await fetch(`${API}/devices/`, {
             method: "GET",
             headers: authHeaders()
@@ -885,7 +857,6 @@ async function loadReportChart() {
 
         const devices = await res.json();
 
-        // B2: tìm sensor nhiệt độ + độ ẩm
         const tempSensor = findSensorByKeyword(devices, [
             "temp", "nhiệt", "nhiet", "temperature"
         ]);
@@ -903,17 +874,14 @@ async function loadReportChart() {
             return;
         }
 
-        // B3: lấy history song song
         const [tempHistory, humiHistory] = await Promise.all([
             tempSensor ? getSensorHistory(tempSensor.id, 20) : [],
             humiSensor ? getSensorHistory(humiSensor.id, 20) : []
         ]);
 
-        // Backend thường trả newest -> oldest nên cần reverse
         tempHistory.reverse();
         humiHistory.reverse();
 
-        // ưu tiên labels từ temp, nếu không có thì lấy humi
         const sourceLabels = tempHistory.length ? tempHistory : humiHistory;
         const labels = sourceLabels.map(item =>
             formatChartTime(item.timestamp)
