@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <title>SmartHome Admin - Hệ thống quản lý tập trung</title>
     <link rel="stylesheet" href="./style.css">
-    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <script>
     // Kiểm tra nếu chưa đăng nhập thì đá về trang login
     if (!localStorage.getItem('token')) {
-        window.location.href = "../auth/login.html";
+        window.location.href = "./login.html";
     }
   </script>
     <div class="dashboard-container">
         <aside class="sidebar">
-            <div class="logo">SMART<span>HOME</span></div>
+            <div class="logo"><i class="fas fa-house-signal"></i> SMART<span>HOME</span></div>
             <nav>
                 <a href="#dashboard" class="nav-item active"><i class="fas fa-th-large"></i> Trang chủ</a>
                 <a href="#thresholds" class="nav-item"><i class="fas fa-exclamation-triangle"></i> Cài đặt Ngưỡng</a>
@@ -30,64 +30,139 @@
             <header class="top-header">
                 <h1 id="page-title">Trang chủ</h1>
                 <div class="user-profile">
-                    Admin <i class="fas fa-user-circle"></i>
-                    <button id="btn-logout">Logout</button>
+                    <i class="fas fa-user-circle"></i> <span>Admin</span>
+                    <button id="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
                 </div>
             </header>
-      
+
           <div class="content-area">
               <section id="page-dashboard" class="page active">
-                  <div class="sensor-grid">
-                      <div class="sensor-card temperature">
-                          <i class="fas fa-thermometer-half"></i>
-                          <div class="info"><h3>Nhiệt độ</h3><p class="value" id="temp-val">25°C</p></div>
+
+                  <!-- Toolbar: nút Thêm thiết bị + nút Refresh -->
+                  <div class="toolbar">
+                      <div class="toolbar-info">
+                          <span class="status-dot live"></span>
+                          <span>Tự động cập nhật mỗi <b>7s</b></span>
+                          <span class="last-update">Cập nhật lần cuối: <b id="last-update">--:--:--</b></span>
                       </div>
-                      <div class="sensor-card">
-                          <i class="fas fa-tint"></i>
-                          <div class="info"><h3>Độ ẩm</h3><p class="value" id="humi-val">60%</p></div>
+                      <div class="toolbar-actions">
+                          <button class="btn-secondary" onclick="loadDevices()">
+                              <i class="fas fa-rotate"></i> Làm mới
+                          </button>
+                          <button class="btn-primary" onclick="openAddDeviceModal()">
+                              <i class="fas fa-plus"></i> Thêm thiết bị
+                          </button>
                       </div>
                   </div>
-                  <!-- NÚT THÊM -->
-                    <button onclick="showAddDeviceForm()" class="btn-add">
-                        + Thêm thiết bị
-                    </button>
 
-                    <!--  FORM -->
-                    <div id="add-device-form" style="display:none; margin:10px 0;">
-                        <input type="text" id="device-name" placeholder="Tên thiết bị">
-                        <input type="text" id="device-feed" placeholder="Feed ID">
-                        
-                        <select id="device-type">
-                            <option value="controller">Controller</option>
-                            <option value="sensor">Sensor</option>
-                        </select>
+                  <!-- Khu vực Sensors -->
+                  <div class="section-block">
+                      <div class="section-header-row">
+                          <h2><i class="fas fa-satellite-dish"></i> Cảm biến (Sensors)</h2>
+                          <span class="badge" id="sensor-count">0 thiết bị</span>
+                      </div>
+                      <div class="device-grid sensor-grid" id="sensor-grid">
+                          <div class="empty-state">
+                              <i class="fas fa-spinner fa-spin"></i> Đang tải cảm biến...
+                          </div>
+                      </div>
+                  </div>
 
-                        <button onclick="addDevice()">Lưu</button>
-                    </div>
-
-                    <!--  DEVICE LIST -->
-                    <div class="device-grid"></div>
+                  <!-- Khu vực Controllers -->
+                  <div class="section-block">
+                      <div class="section-header-row">
+                          <h2><i class="fas fa-toggle-on"></i> Điều khiển (Controllers)</h2>
+                          <span class="badge" id="controller-count">0 thiết bị</span>
+                      </div>
+                      <div class="device-grid controller-grid" id="controller-grid">
+                          <div class="empty-state">
+                              <i class="fas fa-spinner fa-spin"></i> Đang tải controller...
+                          </div>
+                      </div>
+                  </div>
               </section>
-      
+
               <section id="page-thresholds" class="page">
-                  <h2>Cấu hình ngưỡng & Cảnh báo</h2>
-                  <div class="card">
-                      <table class="config-table">
-                          <thead>
-                              <tr><th>Thiết bị</th><th>Ngưỡng</th><th>Hành động</th><th>Lưu</th></tr>
-                          </thead>
-                          <tbody>
-                              <tr>
-                                  <td>Cảm biến Nhiệt độ</td>
-                                  <td><input type="number" value="100"> cel</td>
-                                  <td><select><option>Nháy đèn</option><option>Gửi SMS</option></select></td>
-                                  <td><button class="btn-save">Lưu</button></td>
-                              </tr>
-                          </tbody>
-                      </table>
-                  </div>
+                        <h2><i class="fas fa-exclamation-triangle"></i> Cài đặt Ngưỡng</h2>
+
+                        <!-- Form tạo ngưỡng -->
+                        <div class="card threshold-form-card">
+                            <div class="form-grid">
+
+                                <div class="form-group">
+                                    <label>Chọn Cảm biến</label>
+                                    <select id="threshold-sensor">
+                                        <option value="">-- Đang tải cảm biến --</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Giá trị ngưỡng</label>
+                                    <input
+                                        type="number"
+                                        id="threshold-value"
+                                        placeholder="VD: 30"
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Điều kiện</label>
+                                    <select id="threshold-condition">
+                                        <option value="true">Lớn hơn hoặc bằng</option>
+                                        <option value="false">Nhỏ hơn hoặc bằng</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Thiết bị phản ứng</label>
+                                    <select id="threshold-target-device">
+                                        <option value="">-- Đang tải controller --</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Hành động</label>
+                                    <select id="threshold-action">
+                                        <option value="ON">Bật</option>
+                                        <option value="OFF">Tắt</option>
+                                    </select>
+                                </div>
+
+                            </div>
+
+                            <div style="margin-top:20px;">
+                                <button class="btn-primary" onclick="saveThreshold()">
+                                    <i class="fas fa-save"></i> Lưu ngưỡng
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Danh sách ngưỡng -->
+                        <div class="card" style="margin-top: 24px;">
+                            <h3>Danh sách ngưỡng đã tạo</h3>
+
+                            <div class="table-container">
+                                <table class="log-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Cảm biến</th>
+                                            <th>Điều kiện</th>
+                                            <th>Thiết bị phản ứng</th>
+                                            <th>Hành động</th>
+                                            <th>Xóa</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody id="threshold-table-body">
+                                        <tr>
+                                            <td colspan="5">Đang tải dữ liệu...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
               </section>
-      
+
               <section id="page-scheduler" class="page">
                   <h2>Lập lịch tự động</h2>
                   <div class="schedule-container">
@@ -96,37 +171,40 @@
                           </div>
                   </div>
               </section>
-      
+
               <section id="page-history" class="page">
-                <h2>Nhật ký điều khiển</h2>
-                <div class="table-container">
-                    <table class="log-table">
-                        <thead>
-                            <tr>
-                                <th>Thời gian</th>
-                                <th>Người dùng</th>
-                                <th>Hành động</th>
-                                <th>Thiết bị</th>
-                            </tr>
-                        </thead>
-                        <tbody id="log-table-body">
-                            <tr>
-                                <td>20:30:15</td>
-                                <td><span class="user-badge">Admin</span></td>
-                                <td><span class="action-on">Bật</span></td>
-                                <td>Đèn sân thượng</td>
-                            </tr>
-                            <tr>
-                                <td>20:35:00</td>
-                                <td><span class="user-badge">Member</span></td>
-                                <td><span class="action-off">Tắt</span></td>
-                                <td>Điều hòa phòng khách</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-      
+                    <div class="section-header-row">
+                        <h2><i class="fas fa-history"></i> Nhật ký hoạt động</h2>
+                
+                        <button class="btn-secondary" onclick="fetchLogs()">
+                            <i class="fas fa-rotate"></i> Làm mới
+                        </button>
+                    </div>
+                
+                    <div class="table-container modern-table">
+                        <table class="log-table">
+                            <thead>
+                                <tr>
+                                    <th>Thời gian</th>
+                                    <th>Tên thiết bị</th>
+                                    <th>Hành động</th>
+                                    <th>Trạng thái</th>
+                                    <th>Ghi chú</th>
+                                </tr>
+                            </thead>
+                
+                            <tbody id="log-table-body">
+                                <tr>
+                                    <td colspan="5" class="empty-state">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        Đang tải nhật ký hoạt động...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
               <section id="page-reports" class="page">
                   <div class="report-header">
                       <h2>Báo cáo hệ thống</h2>
@@ -140,11 +218,59 @@
           </div>
       </main>
     </div>
-    <script src="app.js"></script> <script>
+
+    <!-- ============== MODAL: THÊM THIẾT BỊ ============== -->
+    <div class="modal-overlay" id="add-device-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus-circle"></i> Thêm thiết bị mới</h3>
+                <button class="modal-close" onclick="closeAddDeviceModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label><i class="fas fa-tag"></i> Tên thiết bị</label>
+                    <input type="text" id="device-name" placeholder="VD: Đèn phòng khách, Cảm biến nhiệt độ...">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-key"></i> Adafruit Feed Key</label>
+                    <input type="text" id="device-feed" placeholder="VD: temperature, light_living, fan_speed">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-layer-group"></i> Loại thiết bị</label>
+                    <select id="device-type">
+                        <option value="controller">Controller (Đèn, Quạt, Bơm...)</option>
+                        <option value="sensor">Sensor (Nhiệt độ, Độ ẩm, Ánh sáng...)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Khu vực (Zone)</label>
+                    <select id="device-zone">
+                        <option value="">-- Đang tải zones... --</option>
+                    </select>
+                </div>
+                <div id="modal-error" class="form-error"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="closeAddDeviceModal()">Huỷ</button>
+                <button class="btn-primary" onclick="addDevice()">
+                    <i class="fas fa-save"></i> Lưu thiết bị
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+    <script>
       // Xử lý đăng xuất
       document.getElementById('btn-logout').addEventListener('click', function() {
+          localStorage.removeItem('token');
           localStorage.removeItem('isLoggedIn');
-          window.location.href = "../auth/login.html";
+          window.location.href = "./login.html";
       });
   </script>
 </body>

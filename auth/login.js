@@ -1,5 +1,8 @@
-console.log("LOGIN JS VERSION 999");
-alert("login.js mới đã load");
+console.log("LOGIN JS VERSION 1000");
+
+function parseJwt(token) {
+    return JSON.parse(atob(token.split('.')[1]));
+}
 
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -22,21 +25,34 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
         const data = await res.json();
         console.log("FULL RESPONSE:", data);
-        console.log("ROLE FROM SERVER:", data.role);
-        alert("ROLE = " + data.role);
 
         if (!data.access_token) {
             alert("Sai tài khoản hoặc mật khẩu");
             return;
         }
 
-        const role = (data.role || "").toLowerCase();
+        // 🔥 decode JWT
+        const payload = parseJwt(data.access_token);
+        console.log("JWT PAYLOAD:", payload);
+
+        let role = (payload.role || "").toLowerCase();
+
+        // fallback nếu backend không có role
+        if (!role) {
+            if (payload.sub === "admin@gmail.com") {
+                role = "admin";
+            } else {
+                role = "member";
+            }
+        }
+
+        alert("ROLE = " + role);
 
         localStorage.setItem("token", data.access_token);
         localStorage.setItem("role", role);
-        
+
         console.log("ROLE:", role);
-        
+
         if (role === "admin") {
             window.location.href = "/admin/admin.html";
         } else if (role === "member") {
