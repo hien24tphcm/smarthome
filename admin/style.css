@@ -575,6 +575,11 @@ body {
     font-weight: 600;
 }
 
+.status-warning {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
 .modern-table {
     margin-top: 20px;
     border-radius: 18px;
@@ -823,4 +828,63 @@ body {
         padding: 14px;
         font-size: 14px;
     }
+}
+
+/* =========================================================
+   UR-2.4: SENSOR ALERT (nhấp nháy đỏ khi vượt ngưỡng)
+========================================================= */
+
+.sensor-alert {
+    border-color: var(--danger) !important;
+    animation: alertBlink 1.2s ease-in-out infinite;
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.35) !important;
+}
+
+.sensor-alert::before {
+    background: var(--danger) !important;
+    opacity: 1 !important;
+}
+
+.sensor-alert .card-icon {
+    background: rgba(244, 63, 94, 0.18) !important;
+    color: var(--danger) !important;
+}
+
+.sensor-alert .sensor-value-big span:first-child {
+    color: var(--danger) !important;
+}
+
+@keyframes alertBlink {
+    0%, 100% {
+        border-color: var(--danger);
+        box-shadow: 0 0 20px rgba(244, 63, 94, 0.35);
+    }
+    50% {
+        border-color: rgba(244, 63, 94, 0.3);
+        box-shadow: 0 0 40px rgba(244, 63, 94, 0.55);
+    }
+}
+
+/* =========================================================
+   MEMBER ROLE BADGES
+========================================================= */
+
+.role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.role-admin {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+}
+
+.role-member {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--primary);
 }

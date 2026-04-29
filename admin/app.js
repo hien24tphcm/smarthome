@@ -1,14 +1,53 @@
 // ============================================================
-// SmartHome Admin 
+// SmartHome Admin
 // ============================================================
 const API = "http://localhost:8000/api/v1";
 const POLL_INTERVAL_MS = 7000; // tự cập nhật sensor mỗi 7s
 
 // ============================================================
-// HELPERS
+// AUTH & PERMISSIONS
 // ============================================================
 function getToken() {
     return localStorage.getItem("token");
+}
+
+function getRole() {
+    return localStorage.getItem("role") || "";
+}
+
+/**
+ * Nếu không có token hoặc role !== 'admin' →  về login
+ */
+function checkAuth() {
+    const token = getToken();
+    const role  = getRole();
+    if (!token || role !== "admin") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        window.location.href = "/auth/login.html";
+        return false;
+    }
+    return true;
+}
+
+/**
+ * applyPermissions(role): Ẩn/hiện phần tử theo role (dự phòng)
+ * - Nếu role không phải admin → ẩn nút cấu hình, thêm thiết bị, xóa, ...
+ */
+function applyPermissions(role) {
+    const adminOnlyEls = document.querySelectorAll('[data-admin-only]');
+    const isAdmin = role === "admin";
+
+    adminOnlyEls.forEach(el => {
+        el.style.display = isAdmin ? "" : "none";
+    });
+
+    // Ẩn các nav item admin-only nếu cần
+    if (!isAdmin) {
+        document.querySelectorAll('.btn-trash').forEach(btn => {
+            btn.style.display = "none";
+        });
+    }
 }
 
 function authHeaders(extra = {}) {
@@ -261,8 +300,13 @@ function renderSensors(sensors) {
         const value = (d.value !== null && d.value !== undefined)
             ? Number(d.value).toFixed(1).replace(/\.0$/, "")
             : "--";
+
+        // UR-2.4: Kiểm tra ngưỡng → thêm class alert nhấp nháy đỏ
+        const isAlert = checkSensorAlert(d);
+        const alertClass = isAlert ? " sensor-alert" : "";
+
         return `
-            <div class="device-card sensor-card-v2" data-id="${d.id}">
+            <div class="device-card sensor-card-v2${alertClass}" data-id="${d.id}">
                 <div class="card-header">
                     <div class="card-icon"><i class="fas ${meta.icon}"></i></div>
                     <div class="card-title-area">
@@ -278,7 +322,10 @@ function renderSensors(sensors) {
                     <span class="unit">${meta.unit}</span>
                 </div>
                 <div class="sensor-meta">
-                    <i class="fas fa-circle"></i> ${meta.label} · Live
+                    ${isAlert
+                        ? '<i class="fas fa-triangle-exclamation" style="color:var(--danger)"></i> <span style="color:var(--danger);font-weight:600">VƯỢT NGƯỠNG</span>'
+                        : `<i class="fas fa-circle"></i> ${meta.label} · Live`
+                    }
                 </div>
             </div>
         `;
@@ -497,6 +544,7 @@ async function deleteDevice(deviceId, deviceName = "") {
 // ============================================================
 
 let allDevicesCache = [];
+let allThresholdsCache = [];
 
 /**
  * Load sensor + controller vào select box
@@ -694,9 +742,9 @@ async function loadThresholds() {
                         ${target ? escapeHtml(target.name) : "N/A"}
                     </td>
                     <td>
-                        String(item.action).toUpperCase() === "ON"
+                        ${String(item.action).toUpperCase() === "ON"
                             ? "Bật"
-                            : "Tắt"
+                            : "Tắt"}
                     </td>
                     <td>
                         <button
@@ -964,13 +1012,574 @@ async function loadReportChart() {
 }
 
 // ============================================================
+// SCHEDULER MODULE
+// ============================================================
+
+/**
+ * Load danh sách controller vào dropdown lịch
+ */
+async function loadScheduleDevices() {
+    const select = document.getElementById("schedule-device");
+    if (!select) return;
+
+    // Dùng cache nếu đã có, nếu chưa thì fetch
+    let devices = allDevicesCache;
+    if (!devices.length) {
+        try {
+            const res = await fetch(`${API}/devices/`, {
+                method: "GET",
+                headers: authHeaders()
+            });
+            if (res.ok) {
+                devices = await res.json();
+                allDevicesCache = devices;
+            }
+        } catch (err) {
+            console.error("loadScheduleDevices error:", err);
+        }
+    }
+
+    const controllers = devices.filter(
+        d => (d.type || "").toLowerCase() === "controller"
+    );
+
+    select.innerHTML = `
+        <option value="">-- Chọn thiết bị điều khiển --</option>
+        ${controllers.map(d => `
+            <option value="${d.id}">
+                ${escapeHtml(d.name)}
+            </option>
+        `).join("")}
+    `;
+}
+
+/**
+ * Lưu schedule mới 
+ */
+async function saveSchedule() {
+    const deviceId = document.getElementById("schedule-device").value;
+    const timeVal  = document.getElementById("schedule-time").value; // "HH:MM"
+    const action   = document.getElementById("schedule-action").value;
+
+    if (!deviceId || !timeVal) {
+        showToast("Vui lòng chọn thiết bị và thời gian", "error");
+        return;
+    }
+
+    // Tìm tên thiết bị từ cache
+    const device = allDevicesCache.find(d => d.id == deviceId);
+
+    // API ScheduleCreate cần: name, action, date_start (YYYY-MM-DD), time_start (HH:MM:SS)
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    const payload = {
+        name: device ? device.name : "Schedule",
+        action: String(action).toUpperCase(),
+        date_start: today,
+        time_start: timeVal + ":00",          // "HH:MM:SS"
+        target_device_id: Number(deviceId),
+        type: "schedule"
+    };
+
+    try {
+        const res = await fetch(`${API}/settings/schedules`, {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(errText);
+            showToast("Không thể tạo lịch hẹn giờ", "error");
+            return;
+        }
+
+        const created = await res.json();
+        const settingId = created.setting_id || created.id;
+
+        // Apply cho thiết bị
+        const applyRes = await fetch(
+            `${API}/settings/${settingId}/apply/${deviceId}`,
+            {
+                method: "POST",
+                headers: authHeaders()
+            }
+        );
+
+        if (!applyRes.ok) {
+            showToast("Tạo lịch thành công nhưng APPLY thất bại", "error");
+        } else {
+            showToast("Đã tạo và áp dụng lịch hẹn giờ", "success");
+        }
+
+        document.getElementById("schedule-time").value = "";
+        await loadSchedules();
+
+    } catch (err) {
+        console.error("saveSchedule error:", err);
+        showToast("Lỗi kết nối server", "error");
+    }
+}
+
+/**
+ * Load danh sách schedules 
+ */
+async function loadSchedules() {
+    const tbody = document.getElementById("schedule-table-body");
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5">
+                <i class="fas fa-spinner fa-spin"></i> Đang tải lịch hẹn giờ...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const res = await fetch(`${API}/settings/schedules`, {
+            method: "GET",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            tbody.innerHTML = `
+                <tr><td colspan="5">Chưa có dữ liệu</td></tr>
+            `;
+            return;
+        }
+
+        const schedules = await res.json();
+
+        if (!schedules.length) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="empty-state">
+                        <i class="fas fa-clock"></i>
+                        Chưa có lịch hẹn giờ nào
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = schedules.map(item => {
+            const target = allDevicesCache.find(
+                d => d.id == item.target_device_id
+            );
+
+            // Xác định trạng thái dựa trên thời gian
+            const timeDisplay = item.time_start || item.time || "--:--";
+            const statusInfo = getScheduleStatus(timeDisplay);
+
+            return `
+                <tr>
+                    <td>
+                        <i class="fas ${target ? detectControllerIcon(target) : 'fa-plug'}"></i>
+                        ${target ? escapeHtml(target.name) : "N/A"}
+                    </td>
+                    <td>
+                        <i class="fas fa-clock"></i>
+                        <strong>${escapeHtml(timeDisplay)}</strong>
+                    </td>
+                    <td>
+                        <span class="${String(item.action).toUpperCase() === 'ON' ? 'status-success' : 'status-error'}">
+                            <i class="fas fa-power-off"></i>
+                            ${String(item.action).toUpperCase() === "ON" ? "Bật" : "Tắt"}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="${statusInfo.class}">
+                            <i class="fas ${statusInfo.icon}"></i>
+                            ${statusInfo.label}
+                        </span>
+                    </td>
+                    <td>
+                        <button
+                            class="btn-trash"
+                            onclick="deleteSchedule(${item.setting_id})"
+                            title="Xóa lịch"
+                        >
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+    } catch (err) {
+        console.error("loadSchedules error:", err);
+        tbody.innerHTML = `
+            <tr><td colspan="5">Lỗi tải dữ liệu</td></tr>
+        `;
+    }
+}
+
+/**
+ * Xác định trạng thái lịch: Đang đợi / Đã chạy
+ */
+function getScheduleStatus(timeStr) {
+    if (!timeStr) {
+        return { label: "Không rõ", class: "status-error", icon: "fa-question-circle" };
+    }
+
+    const now = new Date();
+    const [hh, mm] = timeStr.split(":").map(Number);
+
+    const scheduleMins = hh * 60 + mm;
+    const currentMins  = now.getHours() * 60 + now.getMinutes();
+
+    if (currentMins >= scheduleMins) {
+        return { label: "Đã chạy", class: "status-success", icon: "fa-circle-check" };
+    } else {
+        return { label: "Đang đợi", class: "status-warning", icon: "fa-hourglass-half" };
+    }
+}
+
+/**
+ * Xóa schedule 
+ */
+async function deleteSchedule(settingId) {
+    if (!confirm("Bạn có chắc muốn xóa lịch hẹn giờ này?")) return;
+
+    try {
+        const res = await fetch(`${API}/settings/${settingId}`, {
+            method: "DELETE",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(errText);
+            showToast("Không thể xóa lịch", "error");
+            return;
+        }
+
+        showToast("Đã xóa lịch hẹn giờ", "success");
+        loadSchedules();
+
+    } catch (err) {
+        console.error("deleteSchedule error:", err);
+        showToast("Lỗi kết nối server", "error");
+    }
+}
+
+
+/**
+ * Kiểm tra sensor có đang vượt ngưỡng nào không
+ * So sánh value với danh sách thresholds đã cache
+ */
+function checkSensorAlert(sensor) {
+    if (sensor.value === null || sensor.value === undefined) return false;
+    const val = Number(sensor.value);
+
+    // Tìm tất cả threshold liên quan đến sensor này 
+    for (const t of allThresholdsCache) {
+        // threshold.name thường là tên sensor đã dùng khi tạo
+        if (t.name === sensor.name) {
+            // condition: true = >=, false = <=
+            if (t.condition && val >= t.value) return true;
+            if (!t.condition && val <= t.value) return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Load thresholds cache (để dùng cho cảnh báo UI)
+ */
+async function loadThresholdsCache() {
+    try {
+        const res = await fetch(`${API}/settings/thresholds`, {
+            method: "GET",
+            headers: authHeaders()
+        });
+        if (res.ok) {
+            allThresholdsCache = await res.json();
+        }
+    } catch (err) {
+        console.error("loadThresholdsCache error:", err);
+    }
+}
+
+// ============================================================
+// MEMBERS MODULE
+// ============================================================
+
+// Lưu danh sách email thành viên đã tra cứu 
+let membersList = JSON.parse(localStorage.getItem("membersList") || "[]");
+
+/**
+ * Thêm member mới 
+ */
+async function addMember() {
+    const fname    = document.getElementById("member-fname").value.trim();
+    const lname    = document.getElementById("member-lname").value.trim();
+    const email    = document.getElementById("member-email").value.trim();
+    const password = document.getElementById("member-password").value;
+    const type     = document.getElementById("member-role").value;
+
+    if (!fname || !lname || !email || !password) {
+        showToast("Vui lòng nhập đầy đủ thông tin", "error");
+        return;
+    }
+
+    // Lấy home_id từ JWT payload
+    let homeId = null;
+    try {
+        const payload = JSON.parse(atob(getToken().split('.')[1]));
+        homeId = payload.home_id || null;
+    } catch (e) {
+        console.warn("Không decode được JWT để lấy home_id");
+    }
+
+    const payload = {
+        fname,
+        lname,
+        email,
+        password,
+        type,
+        home_id: homeId
+    };
+
+    try {
+        const res = await fetch(`${API}/users/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const msg = errData.detail || "Không thể tạo thành viên";
+            showToast(String(msg), "error");
+            return;
+        }
+
+        const newUser = await res.json();
+        showToast(`Đã thêm thành viên ${newUser.fname} ${newUser.lname}`, "success");
+
+        // Lưu email vào danh sách để hiển thị
+        if (!membersList.includes(email)) {
+            membersList.push(email);
+            localStorage.setItem("membersList", JSON.stringify(membersList));
+        }
+
+        // Reset form
+        document.getElementById("member-fname").value = "";
+        document.getElementById("member-lname").value = "";
+        document.getElementById("member-email").value = "";
+        document.getElementById("member-password").value = "";
+
+        await loadMembers();
+
+    } catch (err) {
+        console.error("addMember error:", err);
+        showToast("Lỗi kết nối server", "error");
+    }
+}
+
+/**
+ * Load danh sách members 
+ */
+async function loadMembers() {
+    const tbody = document.getElementById("member-table-body");
+    if (!tbody) return;
+
+    if (!membersList.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-state">
+                    <i class="fas fa-users"></i>
+                    Chưa có thành viên. Hãy thêm thành viên mới bằng form bên trên.
+                </td>
+            </tr>`;
+        return;
+    }
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="empty-state">
+                <i class="fas fa-spinner fa-spin"></i> Đang tra cứu thành viên...
+            </td>
+        </tr>`;
+
+    const results = [];
+    for (const email of membersList) {
+        try {
+            const res = await fetch(`${API}/users/${encodeURIComponent(email)}`, {
+                method: "GET",
+                headers: authHeaders()
+            });
+            if (res.ok) {
+                results.push(await res.json());
+            }
+        } catch (err) {
+            console.warn("Không tìm được:", email);
+        }
+    }
+
+    if (!results.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-state">
+                    <i class="fas fa-users"></i>
+                    Không tìm thấy thành viên nào
+                </td>
+            </tr>`;
+        return;
+    }
+
+    tbody.innerHTML = results.map(u => {
+        const roleBadge = (u.type || "").toLowerCase() === "admin"
+            ? '<span class="role-badge role-admin"><i class="fas fa-crown"></i> Admin</span>'
+            : '<span class="role-badge role-member"><i class="fas fa-user"></i> Member</span>';
+
+        const statusBadge = u.status
+            ? '<span class="status-success"><i class="fas fa-circle-check"></i> Hoạt động</span>'
+            : '<span class="status-error"><i class="fas fa-circle-xmark"></i> Vô hiệu</span>';
+
+        return `
+            <tr>
+                <td>${u.id}</td>
+                <td>${escapeHtml(u.fname)} ${escapeHtml(u.lname)}</td>
+                <td>${escapeHtml(u.email)}</td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+            </tr>`;
+    }).join("");
+}
+
+
+/**
+ * exportLogsToPDF(): 
+ */
+function exportLogsToPDF() {
+    const { jsPDF } = window.jspdf;
+    if (!jsPDF) {
+        showToast("Thư viện jsPDF chưa tải xong", "error");
+        return;
+    }
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    // Header
+    doc.setFillColor(11, 18, 32);
+    doc.rect(0, 0, 297, 35, "F");
+
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text("SMARTHOME", 14, 16);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.text("Bao cao Nhat ky Hoat dong", 14, 26);
+
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184);
+    const now = new Date();
+    doc.text(
+        `Xuat luc: ${now.toLocaleString("vi-VN")}`,
+        283, 16, { align: "right" }
+    );
+    doc.text(
+        `Nguoi xuat: Admin`,
+        283, 23, { align: "right" }
+    );
+
+    // Lấy dữ liệu từ bảng HTML
+    const table = document.querySelector("#page-history .log-table");
+    if (!table) {
+        showToast("Không tìm thấy bảng nhật ký", "error");
+        return;
+    }
+
+    const headers = [];
+    table.querySelectorAll("thead th").forEach(th => {
+        headers.push(th.innerText.trim());
+    });
+
+    const rows = [];
+    table.querySelectorAll("tbody tr").forEach(tr => {
+        const cells = [];
+        tr.querySelectorAll("td").forEach(td => {
+            cells.push(td.innerText.trim());
+        });
+        if (cells.length === headers.length) {
+            rows.push(cells);
+        }
+    });
+
+    if (!rows.length) {
+        showToast("Bảng nhật ký đang trống", "error");
+        return;
+    }
+
+    doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: 40,
+        theme: "grid",
+        headStyles: {
+            fillColor: [30, 41, 59],
+            textColor: [56, 189, 248],
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "left"
+        },
+        bodyStyles: {
+            fillColor: [15, 23, 42],
+            textColor: [203, 213, 225],
+            fontSize: 8.5,
+            cellPadding: 4
+        },
+        alternateRowStyles: {
+            fillColor: [26, 37, 64]
+        },
+        styles: {
+            lineColor: [56, 189, 248],
+            lineWidth: 0.15,
+            overflow: "linebreak"
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: (data) => {
+            // Footer mỗi trang
+            const pageCount = doc.internal.getNumberOfPages();
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184);
+            doc.text(
+                `Trang ${data.pageNumber} / ${pageCount}`,
+                283, 200, { align: "right" }
+            );
+            doc.text("SmartHome Admin System", 14, 200);
+        }
+    });
+
+    doc.save(`SmartHome_NhatKy_${now.toISOString().slice(0, 10)}.pdf`);
+    showToast("Da xuat file PDF thanh cong!", "success");
+}
+
+// ============================================================
 // INIT
 // ============================================================
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
+    // Kiểm tra quyền
+    if (!checkAuth()) return;
+    applyPermissions(getRole());
+
+    // Load threshold cache cho cảnh báo
+    await loadThresholdsCache();
+
     loadReportChart();
     loadDevices();
     fetchLogs();
+    loadScheduleDevices();
+    loadSchedules();
+    loadMembers();
 });
-// Polling 
+// Polling
 setInterval(loadDevices, POLL_INTERVAL_MS);
-setInterval(loadReportChart, 30000); 
+setInterval(loadReportChart, 30000);
+setInterval(loadThresholdsCache, 30000);

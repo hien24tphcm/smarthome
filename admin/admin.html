@@ -6,13 +6,21 @@
     <link rel="stylesheet" href="./style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
   <script>
-    // Kiểm tra nếu chưa đăng nhập thì đá về trang login
-    if (!localStorage.getItem('token')) {
-        window.location.href = "./login.html";
-    }
+    // checkAuth: kiểm tra token + role
+    (function checkAuth() {
+        const token = localStorage.getItem('token');
+        const role  = localStorage.getItem('role');
+        if (!token || role !== 'admin') {
+            localStorage.removeItem('token');
+            localStorage.removeItem('role');
+            window.location.href = "/auth/login.html";
+        }
+    })();
   </script>
     <div class="dashboard-container">
         <aside class="sidebar">
@@ -21,6 +29,7 @@
                 <a href="#dashboard" class="nav-item active"><i class="fas fa-th-large"></i> Trang chủ</a>
                 <a href="#thresholds" class="nav-item"><i class="fas fa-exclamation-triangle"></i> Cài đặt Ngưỡng</a>
                 <a href="#scheduler" class="nav-item"><i class="fas fa-calendar-alt"></i> Lập lịch & Điều khiển</a>
+                <a href="#members" class="nav-item"><i class="fas fa-users-cog"></i> Quản lý Member</a>
                 <a href="#history" class="nav-item"><i class="fas fa-history"></i> Nhật ký hoạt động</a>
                 <a href="#reports" class="nav-item"><i class="fas fa-chart-line"></i> Báo cáo & Thống kê</a>
             </nav>
@@ -164,11 +173,142 @@
               </section>
 
               <section id="page-scheduler" class="page">
-                  <h2>Lập lịch tự động</h2>
-                  <div class="schedule-container">
-                      <button class="btn-primary">+ Thêm lịch mới</button>
-                      <div class="schedule-list">
+                  <h2><i class="fas fa-clock"></i> Lập lịch & Điều khiển</h2>
+
+                  <!-- Form tạo lịch -->
+                  <div class="card threshold-form-card">
+                      <div class="form-grid">
+
+                          <div class="form-group">
+                              <label><i class="fas fa-plug"></i> Chọn thiết bị</label>
+                              <select id="schedule-device">
+                                  <option value="">-- Đang tải controller --</option>
+                              </select>
                           </div>
+
+                          <div class="form-group">
+                              <label><i class="fas fa-clock"></i> Thời gian</label>
+                              <input type="time" id="schedule-time" />
+                          </div>
+
+                          <div class="form-group">
+                              <label><i class="fas fa-power-off"></i> Hành động</label>
+                              <select id="schedule-action">
+                                  <option value="ON">Bật</option>
+                                  <option value="OFF">Tắt</option>
+                              </select>
+                          </div>
+
+                      </div>
+
+                      <div style="margin-top:20px;">
+                          <button class="btn-primary" onclick="saveSchedule()">
+                              <i class="fas fa-save"></i> Hẹn giờ mới
+                          </button>
+                      </div>
+                  </div>
+
+                  <!-- Danh sách lịch đã cài -->
+                  <div class="card" style="margin-top: 24px;">
+                      <h3><i class="fas fa-list-check"></i> Danh sách lịch đã cài đặt</h3>
+
+                      <div class="table-container">
+                          <table class="log-table">
+                              <thead>
+                                  <tr>
+                                      <th><i class="fas fa-plug"></i> Thiết bị</th>
+                                      <th><i class="fas fa-clock"></i> Thời gian</th>
+                                      <th><i class="fas fa-bolt"></i> Hành động</th>
+                                      <th><i class="fas fa-info-circle"></i> Trạng thái</th>
+                                      <th>Xóa</th>
+                                  </tr>
+                              </thead>
+                              <tbody id="schedule-table-body">
+                                  <tr>
+                                      <td colspan="5">Đang tải dữ liệu...</td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+              </section>
+
+              <!-- ============== MEMBERS SECTION ============== -->
+              <section id="page-members" class="page">
+                  <h2><i class="fas fa-users-cog"></i> Quản lý Thành viên</h2>
+
+                  <!-- Form thêm member -->
+                  <div class="card threshold-form-card">
+                      <h3><i class="fas fa-user-plus"></i> Thêm thành viên mới</h3>
+                      <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
+
+                          <div class="form-group">
+                              <label><i class="fas fa-user"></i> Họ</label>
+                              <input type="text" id="member-fname" placeholder="VD: Nguyễn" />
+                          </div>
+
+                          <div class="form-group">
+                              <label><i class="fas fa-user"></i> Tên</label>
+                              <input type="text" id="member-lname" placeholder="VD: Văn A" />
+                          </div>
+
+                          <div class="form-group">
+                              <label><i class="fas fa-envelope"></i> Email</label>
+                              <input type="email" id="member-email" placeholder="VD: member@gmail.com" />
+                          </div>
+
+                          <div class="form-group">
+                              <label><i class="fas fa-lock"></i> Mật khẩu</label>
+                              <input type="password" id="member-password" placeholder="Mật khẩu ban đầu" />
+                          </div>
+
+                          <div class="form-group">
+                              <label><i class="fas fa-shield-halved"></i> Vai trò</label>
+                              <select id="member-role">
+                                  <option value="member">Member</option>
+                                  <option value="admin">Admin</option>
+                              </select>
+                          </div>
+
+                      </div>
+
+                      <div style="margin-top:20px;">
+                          <button class="btn-primary" onclick="addMember()">
+                              <i class="fas fa-user-plus"></i> Thêm thành viên
+                          </button>
+                      </div>
+                  </div>
+
+                  <!-- Bảng danh sách thành viên -->
+                  <div class="card" style="margin-top: 24px;">
+                      <div class="section-header-row">
+                          <h3><i class="fas fa-users"></i> Danh sách thành viên</h3>
+                          <button class="btn-secondary" onclick="loadMembers()">
+                              <i class="fas fa-rotate"></i> Làm mới
+                          </button>
+                      </div>
+
+                      <div class="table-container">
+                          <table class="log-table">
+                              <thead>
+                                  <tr>
+                                      <th><i class="fas fa-hashtag"></i> ID</th>
+                                      <th><i class="fas fa-user"></i> Họ tên</th>
+                                      <th><i class="fas fa-envelope"></i> Email</th>
+                                      <th><i class="fas fa-shield-halved"></i> Vai trò</th>
+                                      <th><i class="fas fa-circle-check"></i> Trạng thái</th>
+                                  </tr>
+                              </thead>
+                              <tbody id="member-table-body">
+                                  <tr>
+                                      <td colspan="5" class="empty-state">
+                                          <i class="fas fa-users"></i>
+                                          Thêm email thành viên để tra cứu
+                                      </td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </div>
                   </div>
               </section>
 
@@ -176,11 +316,16 @@
                     <div class="section-header-row">
                         <h2><i class="fas fa-history"></i> Nhật ký hoạt động</h2>
                 
-                        <button class="btn-secondary" onclick="fetchLogs()">
-                            <i class="fas fa-rotate"></i> Làm mới
-                        </button>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn-secondary" onclick="fetchLogs()">
+                                <i class="fas fa-rotate"></i> Làm mới
+                            </button>
+                            <button class="btn-primary" onclick="exportLogsToPDF()">
+                                <i class="fas fa-file-pdf"></i> Xuất PDF
+                            </button>
+                        </div>
                     </div>
-                
+
                     <div class="table-container modern-table">
                         <table class="log-table">
                             <thead>
