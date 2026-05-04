@@ -102,15 +102,16 @@
                 <h2>MyHome</h2>
             </div>
             <nav class="menu">
-                <a href="index.html" class="active"><i class="fa-solid fa-border-all"></i> Tổng quan</a>
-                <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử</a>
+                <a href="index.html" id="nav-home" class="active"><i class="fa-solid fa-border-all"></i> Tổng quan</a>
+                <a href="#" id="nav-settings"><i class="fa-solid fa-gear"></i> Cài đặt</a>
+                <a href="#" id="nav-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử</a>
                 </nav>
         </aside>
 
         <main class="main-content">
             <header class="header">
                 <div class="greeting">
-                    <p>Chào buổi sáng,</p>
+                    <p id="greeting-text">Chào buổi sáng,</p>
                     <h3>Nhà của bạn</h3>
                 </div>
                 <div class="user-actions">
@@ -118,7 +119,6 @@
                         <i class="fa-solid fa-moon"></i>
                     </div>
 
-                    <div class="notification has-alert" id="notif-bell" style="cursor: pointer;"><i class="fa-solid fa-bell"></i></div>
                     
                     <div class="notification" id="notif-bell" style="position: relative; cursor: pointer;">
                         <i class="fa-solid fa-bell"></i>
@@ -153,6 +153,43 @@
                     <div class="widget-grid" id="controller-container"></div>
                 </div>
 
+                <div class="dashboard-section" id="section-settings" style="display: none;">
+                    <h3 class="section-heading"><i class="fa-solid fa-gear"></i> Cài đặt hệ thống</h3>
+                    <div class="settings-grid" id="settings-grid">
+                        <div class="settings-card">
+                            <h4>Chưa có dữ liệu cài đặt.</h4>
+                            <p class="text-muted">Nhấn vào menu Cài đặt để xem danh sách lịch và ngưỡng.</p>
+                        </div>
+                    </div>
+                </div>
+                <div></div>
+                <!-- PHẦN 4: LỊCH SỬ HỆ THỐNG -->
+                <div class="dashboard-section" id="section-history" style="display: none;">
+                    <h3 class="section-heading"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử hoạt động</h3>
+                    
+                    <!-- Thanh công cụ lọc -->
+                    <div class="filters-container" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color);">
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label for="filter-date" style="color: var(--text-secondary); font-size: 0.85rem;">Ngày:</label>
+                            <input type="date" id="filter-date" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary);">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label for="filter-type" style="color: var(--text-secondary); font-size: 0.85rem;">Loại hoạt động:</label>
+                            <select id="filter-type" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); min-width: 150px;">
+                                <option value="all">Tất cả</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button id="reset-filter" style="padding: 9px 15px; background: #6c7293; color: #fff; border: none; border-radius: 6px; cursor: pointer;">Làm mới</button>
+                        </div>
+                    </div>
+
+                    <!-- Khu vực Timeline -->
+                    <div id="log-display-area">
+                        <p style="text-align: center; color: var(--text-secondary);">Đang tải nhật ký...</p>
+                    </div>
+                </div>
+
             </div>
         </main>
     </div>
@@ -160,6 +197,21 @@
 <script src="api.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
+    // --- XỬ LÝ LỜI CHÀO THEO THỜI GIAN THỰC ---
+        const greetingElement = document.getElementById('greeting-text');
+        if (greetingElement) {
+            const currentHour = new Date().getHours();
+            
+            if (currentHour >= 5 && currentHour < 11) {
+                greetingElement.innerHTML = 'Chào buổi sáng, ⛅';
+            } else if (currentHour >= 11 && currentHour < 14) {
+                greetingElement.innerHTML = 'Chào buổi trưa, ☀️';
+            } else if (currentHour >= 14 && currentHour < 18) {
+                greetingElement.innerHTML = 'Chào buổi chiều, 🌤️';
+            } else {
+                greetingElement.innerHTML = 'Chào buổi tối, 🌙';
+            }
+        }
     // --- XỬ LÝ GIAO DIỆN SÁNG/TỐI (DARK/LIGHT MODE) ---
     const themeToggle = document.getElementById('theme-toggle');
     const body = document.body;
@@ -184,10 +236,214 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loadingContainer = document.getElementById('loading-container');
     const sectionSensors = document.getElementById('section-sensors');
     const sectionControllers = document.getElementById('section-controllers');
+    const sectionSettings = document.getElementById('section-settings');
     const sensorContainer = document.getElementById('sensor-container');
     const chartsContainer = document.getElementById('charts-container');
     const controllerContainer = document.getElementById('controller-container');
+    const settingsGrid = document.getElementById('settings-grid');
     const filterBar = document.getElementById('room-filter-bar');
+    const navHome = document.getElementById('nav-home');
+    const navSettings = document.getElementById('nav-settings');
+    const sectionHistory = document.getElementById('section-history');
+    const navHistory = document.getElementById('nav-history');
+    const logContainer = document.getElementById('log-display-area');
+    const filterDate = document.getElementById('filter-date');
+    const filterType = document.getElementById('filter-type');
+    const resetFilterBtn = document.getElementById('reset-filter');
+    let allLogs = []; // Lưu trữ logs để lọc
+
+    API.getAllThresholds = async () => {
+        try {
+            const res = await API.request('/settings/thresholds');
+            return Array.isArray(res) ? res : (res ? [res] : []);
+        } catch (e) {
+            console.warn('Không lấy được danh sách ngưỡng:', e);
+            return [];
+        }
+    };
+
+    API.getAllSchedules = async () => {
+        try {
+            const res = await API.request('/settings/schedules');
+            return Array.isArray(res) ? res : (res ? [res] : []);
+        } catch (e) {
+            if (e.status === 404 || (e.message && e.message.toLowerCase().includes('not found'))) {
+                console.warn('Endpoint lịch chưa tồn tại, bỏ qua:', e.message);
+                return [];
+            }
+            console.warn('Không lấy được danh sách lịch:', e.message || e);
+            return [];
+        }
+    };
+
+    API.getThresholds = async (deviceId) => {
+        const thresholds = await API.getAllThresholds();
+        if (!deviceId) return thresholds;
+        return thresholds.filter(t => t && (
+            t.target_device_id === deviceId ||
+            t.target_device === deviceId ||
+            t.device_id === deviceId ||
+            t.id === deviceId
+        ));
+    };
+
+    function setActiveMenu(link) {
+        document.querySelectorAll('.menu a').forEach(a => a.classList.remove('active'));
+        link.classList.add('active');
+    }
+
+    function createDeviceListHtml(devices) {
+        if (!devices || devices.length === 0) {
+            return '<div class="text-muted">Không có thiết bị áp dụng.</div>';
+        }
+        return `<ul style="margin: 0; padding-left: 18px; color: var(--text-primary);">${devices.map(device => `<li>${device.device_name || `ID ${device.device_id}`} (${device.device_type || 'unknown'})</li>`).join('')}</ul>`;
+    }
+
+    function createSettingCard(title, detailHtml, deviceHtml) {
+        const card = document.createElement('div');
+        card.className = 'settings-card';
+        card.innerHTML = `
+            <h4>${title}</h4>
+            ${detailHtml}
+            <div class="setting-item flex-col">
+                <div class="setting-header"><strong>Thiết bị đang dùng</strong></div>
+                ${deviceHtml}
+            </div>
+        `;
+        return card;
+    }
+
+    function renderScheduleCard(schedule) {
+        const detailHtml = `
+            <div class="setting-item flex-col">
+                <div class="setting-header"><strong>Hành động</strong></div>
+                <div class="text-muted">${schedule.action || 'Không rõ'}</div>
+            </div>
+            <div class="setting-item">
+                <span><strong>Bắt đầu</strong></span>
+                <span>${schedule.date_start || 'N/A'}</span>
+            </div>
+            <div class="setting-item">
+                <span><strong>Kết thúc</strong></span>
+                <span>${schedule.date_end || 'Không giới hạn'}</span>
+            </div>
+            <div class="setting-item">
+                <span><strong>Giờ</strong></span>
+                <span>${schedule.time_start || 'N/A'}</span>
+            </div>
+            <div class="setting-item">
+                <span><strong>Timer</strong></span>
+                <span>${schedule.timer != null ? schedule.timer + ' phút' : 'Không có'}</span>
+            </div>
+        `;
+        const devices = Array.isArray(schedule.applied_devices) ? schedule.applied_devices : [];
+        return createSettingCard(`Lịch: ${schedule.name}`, detailHtml, createDeviceListHtml(devices));
+    }
+
+    function renderThresholdCard(threshold, deviceMap) {
+        const targetDevice = deviceMap.get(threshold.target_device_id);
+        const targetText = targetDevice ? `${targetDevice.name} (${targetDevice.type || 'unknown'})` : `ID ${threshold.target_device_id}`;
+        const detailHtml = `
+            <div class="setting-item flex-col">
+                <div class="setting-header"><strong>Hành động</strong></div>
+                <div class="text-muted">${threshold.action || 'Không rõ'}</div>
+            </div>
+            <div class="setting-item">
+                <span><strong>Ngưỡng</strong></span>
+                <span>${threshold.condition === true || threshold.condition === 'true' ? '>=' : '<='} ${threshold.value}</span>
+            </div>
+            <div class="setting-item">
+                <span><strong>Thiết bị mục tiêu</strong></span>
+                <span>${targetText}</span>
+            </div>
+        `;
+        const devices = Array.isArray(threshold.applied_devices) ? threshold.applied_devices : [];
+        return createSettingCard(`Ngưỡng: ${threshold.name}`, detailHtml, createDeviceListHtml(devices.length ? devices : [{ device_name: targetText, device_type: 'Mục tiêu', device_id: threshold.target_device_id }]));
+    }
+
+    async function loadSettingsPage() {
+        sectionSensors.style.display = 'none';
+        sectionControllers.style.display = 'none';
+        sectionHistory.style.display = 'none'; // THÊM DÒNG NÀY ĐỂ ẨN LỊCH SỬ
+        filterBar.style.display = 'none';
+        loadingContainer.style.display = 'none';
+        sectionSettings.style.display = 'block';
+        settingsGrid.innerHTML = `
+            <div class="settings-card">
+                <h4>Đang tải danh sách cài đặt...</h4>
+            </div>
+        `;
+
+        const [schedules, thresholds, devices] = await Promise.all([
+            API.getAllSchedules(),
+            API.getAllThresholds(),
+            API.getDevices()
+        ]);
+        const deviceMap = new Map((devices || []).map(d => [d.id, d]));
+
+        const cards = [];
+        if (Array.isArray(schedules) && schedules.length) {
+            schedules.forEach(schedule => cards.push(renderScheduleCard(schedule)));
+        }
+        if (Array.isArray(thresholds) && thresholds.length) {
+            thresholds.forEach(threshold => cards.push(renderThresholdCard(threshold, deviceMap)));
+        }
+
+        if (cards.length === 0) {
+            settingsGrid.innerHTML = `
+                <div class="settings-card">
+                    <h4>Chưa có cài đặt nào.</h4>
+                    <p class="text-muted">Hiện chưa có lịch hoặc ngưỡng nào để hiển thị.</p>
+                </div>`;
+            return;
+        }
+
+        settingsGrid.innerHTML = '';
+        cards.forEach(card => settingsGrid.appendChild(card));
+    }
+
+    function showDashboardView() {
+        sectionSensors.style.display = 'block';
+        sectionControllers.style.display = 'block';
+        sectionSettings.style.display = 'none';
+        filterBar.style.display = 'flex';
+        loadingContainer.style.display = 'none';
+    }
+
+    navHome.addEventListener('click', (event) => {
+        event.preventDefault();
+        setActiveMenu(navHome);
+        showDashboardView();
+    });
+
+    navSettings.addEventListener('click', (event) => {
+        event.preventDefault();
+        setActiveMenu(navSettings);
+        loadSettingsPage();
+    });
+    navHistory.addEventListener('click', (event) => {
+        event.preventDefault();
+        setActiveMenu(navHistory);
+        
+        // Ẩn tất cả các phần khác và hiện phần Lịch sử
+        sectionSensors.style.display = 'none';
+        sectionControllers.style.display = 'none';
+        sectionSettings.style.display = 'none';
+        filterBar.style.display = 'none';
+        sectionHistory.style.display = 'block';
+        
+        loadSystemHistory(); // Gọi hàm tải dữ liệu
+    });
+
+    // Cập nhật lại hàm showDashboardView để ẩn luôn cả sectionHistory
+    function showDashboardView() {
+        sectionSensors.style.display = 'block';
+        sectionControllers.style.display = 'block';
+        sectionSettings.style.display = 'none';
+        sectionHistory.style.display = 'none'; // Thêm dòng này
+        filterBar.style.display = 'flex';
+        loadingContainer.style.display = 'none';
+    }
 
     // --- XỬ LÝ DROPDOWN THÔNG BÁO ---
     const notifBell = document.getElementById('notif-bell');
@@ -562,91 +818,98 @@ function renderFanCard(device, container) {
     // RENDER CẢM BIẾN VÀ TÍNH NĂNG CẢNH BÁO VƯỢT NGƯỠNG
     // =========================================================
     async function renderSensorCard(device, container) {
-        let val = 0;
-        try {
-            const state = await API.getDeviceState(device.id);
-            val = state.sensor_value !== undefined ? state.sensor_value : 0;
-        } catch (error) {
-            console.warn(`Không lấy được State cho cảm biến ID ${device.id}`);
-        }
-
-        val = parseFloat(val);
-        const isTemp = device.name.toLowerCase().includes('nhiệt');
-        
-        let isAlert = false;
-        let alertMsg = "Cập nhật liên tục";
-        let ringStyle = "";
-        let valStyle = "";
-        let iconHtml = '<i class="fa-solid fa-clock"></i>';
-
-        // -----------------------------------------------------------------
-        // LẤY NGƯỠNG CẢNH BÁO (THRESHOLD) TỪ API VÀ KIỂM TRA
-        // -----------------------------------------------------------------
-        try {
-            // Lấy toàn bộ ngưỡng từ API
-            const thresholds = await API.getThresholds();
-            
-            // Tìm ngưỡng cài đặt cho thiết bị này (Backend có thể lưu dưới dạng target_device_id hoặc device_id)
-            const deviceThreshold = thresholds.find(t => 
-                t.target_device === device.id || 
-                t.device_id === device.id
-            );
-
-            if (deviceThreshold) {
-                const thresholdValue = parseFloat(deviceThreshold.value);
-                const condition = deviceThreshold.condition; // Ví dụ: '>', '<', '>='...
-
-                // Kiểm tra xem giá trị hiện tại có vi phạm điều kiện hay không
-                let isTriggered = false;
-                if (condition === '>' && val > thresholdValue) isTriggered = true;
-                else if (condition === '>=' && val >= thresholdValue) isTriggered = true;
-                else if (condition === '<' && val < thresholdValue) isTriggered = true;
-                else if (condition === '<=' && val <= thresholdValue) isTriggered = true;
-                else if (condition === '==' && val === thresholdValue) isTriggered = true;
-                // Nếu backend không trả về condition, mặc định coi là >=
-                else if (!condition && val >= thresholdValue) isTriggered = true;
-
-                // Cập nhật giao diện nếu bị vượt ngưỡng
-                if (isTriggered) {
-                    isAlert = true;
-                    if (isTemp) {
-                        alertMsg = `Vượt ngưỡng (${condition || '>='} ${thresholdValue})`;
-                        ringStyle = "border-color: var(--danger-color); box-shadow: 0 0 15px rgba(255,77,77,0.3);";
-                        valStyle = "color: var(--danger-color);";
-                        iconHtml = '<i class="fa-solid fa-triangle-exclamation"></i>';
-                    } else {
-                        alertMsg = `Cảnh báo độ ẩm (${condition || '>='} ${thresholdValue})`;
-                        ringStyle = "border-color: #4dacff; box-shadow: 0 0 15px rgba(77,172,255,0.3);";
-                        valStyle = "color: #4dacff;";
-                        iconHtml = '<i class="fa-solid fa-droplet"></i>';
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn(`Lỗi khi lấy Threshold cho cảm biến ID ${device.id}`, error);
-        }
-        // -----------------------------------------------------------------
-
-        const card = document.createElement('div');
-        card.className = `card room-status-card widget-item ${isAlert ? 'alert-border' : ''}`;
-        
-        if (isAlert && isTemp) card.style.border = "1px solid var(--danger-color)";
-        else if (isAlert && !isTemp) card.style.border = "1px solid #4dacff";
-
-        card.setAttribute('data-room', `room-${device.zone_id}`);
-        card.setAttribute('data-device-id', device.id);
-        card.innerHTML = `
-            <div class="room-info">
-                <h2>${device.name}</h2>
-                <p class="humidity" style="${isAlert && isTemp ? 'color: var(--danger-color);' : (isAlert ? 'color:#4dacff;' : '')}">${iconHtml} ${alertMsg}</p>
-            </div>
-            <div class="temp-ring" style="${ringStyle}">
-                <div class="temp-inner" style="${valStyle}">${val}&deg;</div>
-            </div>
-        `;
-        container.appendChild(card);
+    let val = 0;
+    try {
+        const state = await API.getDeviceState(device.id);
+        val = state && state.sensor_value !== undefined ? state.sensor_value : 0;
+    } catch (error) {
+        console.warn(`Không lấy được State cho cảm biến ID ${device.id}`);
     }
 
+    val = parseFloat(val);
+    const isTemp = device.name.toLowerCase().includes('nhiệt');
+    
+    let isAlert = false;
+    let alertMsg = "Cập nhật liên tục";
+    let ringStyle = "";
+    let valStyle = "";
+    let iconHtml = '<i class="fa-solid fa-clock"></i>';
+
+    try {
+        // FIX LỖI 1: Luôn đảm bảo thresholds là một mảng để tránh crash hàm .find()
+        const rawThresholds = await API.getThresholds(device.id); 
+        const thresholds = Array.isArray(rawThresholds) ? rawThresholds : (rawThresholds ? [rawThresholds] : []);
+        
+        // FIX LỖI 2: Tìm kiếm an toàn theo các trường có thể chứa ID
+        const deviceThreshold = thresholds.find(t => 
+            t && (
+                t.target_device_id === device.id ||
+                t.target_device === device.id ||
+                t.device_id === device.id ||
+                t.id === device.id
+            )
+        );
+
+        if (deviceThreshold) {
+            const thresholdValue = parseFloat(deviceThreshold.value);
+            const condition = deviceThreshold.condition; 
+
+            let isTriggered = false;
+            // Logic kiểm tra điều kiện (giữ nguyên nhưng thêm kiểm tra giá trị)
+            if (condition === '>' && val > thresholdValue) isTriggered = true;
+            else if (condition === '>=' && val >= thresholdValue) isTriggered = true;
+            else if (condition === '<' && val < thresholdValue) isTriggered = true;
+            else if (condition === '<=' && val <= thresholdValue) isTriggered = true;
+            else if (condition === '==' && val === thresholdValue) isTriggered = true;
+            else if (!condition && val >= thresholdValue) isTriggered = true;
+
+            if (isTriggered) {
+                isAlert = true;
+                const displayCond = condition || '>=';
+                if (isTemp) {
+                    alertMsg = `Vượt ngưỡng (${displayCond} ${thresholdValue})`;
+                    ringStyle = "border-color: var(--danger-color); box-shadow: 0 0 15px rgba(255,77,77,0.3);";
+                    valStyle = "color: var(--danger-color);";
+                    iconHtml = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                } else {
+                    alertMsg = `Cảnh báo độ ẩm (${displayCond} ${thresholdValue})`;
+                    ringStyle = "border-color: #4dacff; box-shadow: 0 0 15px rgba(77,172,255,0.3);";
+                    valStyle = "color: #4dacff;";
+                    iconHtml = '<i class="fa-solid fa-droplet"></i>';
+                }
+            }
+        }
+    } catch (error) {
+        console.error(`Lỗi khi xử lý Threshold cho cảm biến ID ${device.id}:`, error);
+    }
+
+    const card = document.createElement('div');
+    card.className = `card room-status-card widget-item ${isAlert ? 'alert-border' : ''}`;
+    
+    // Áp dụng màu viền trực tiếp nếu có cảnh báo
+    if (isAlert) {
+        card.style.border = isTemp ? "1px solid var(--danger-color)" : "1px solid #4dacff";
+    }
+
+    card.setAttribute('data-room', `room-${device.zone_id}`);
+    card.setAttribute('data-device-id', device.id);
+    
+    // Thêm đơn vị % cho độ ẩm, °C cho nhiệt độ
+    const unit = isTemp ? '°' : '%';
+
+    card.innerHTML = `
+        <div class="room-info">
+            <h2>${device.name}</h2>
+            <p class="humidity" style="${isAlert ? (isTemp ? 'color: var(--danger-color);' : 'color:#4dacff;') : ''}">
+                ${iconHtml} ${alertMsg}
+            </p>
+        </div>
+        <div class="temp-ring" style="${ringStyle}">
+            <div class="temp-inner" style="${valStyle}">${val}${unit}</div>
+        </div>
+    `;
+    container.appendChild(card);
+}
     async function renderSensorChart(device) {
         const chartWrapper = document.createElement('div');
         chartWrapper.className = 'card widget-item'; 
@@ -767,6 +1030,93 @@ function renderFanCard(device, container) {
                 });
             };
         });
+    }
+    async function loadSystemHistory() {
+        logContainer.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+        try {
+            const logs = await API.getLogs(); // Lấy tất cả logs
+            if (logs && logs.length > 0) {
+                allLogs = logs;
+                populateTypeFilter(allLogs);
+                renderLogs(allLogs);         
+            } else {
+                renderEmptyLogs();
+            }
+        } catch (error) {
+            logContainer.innerHTML = '<p style="color:var(--danger-color); text-align:center;">Lỗi tải dữ liệu lịch sử.</p>';
+        }
+    }
+
+    function renderLogs(logsData) {
+        logContainer.innerHTML = ''; 
+        if (!logsData || logsData.length === 0) {
+            renderEmptyLogs();
+            return;
+        }
+
+        const timeline = document.createElement('div');
+        timeline.className = 'timeline'; // Đảm bảo bạn có CSS cho .timeline
+
+        logsData.forEach(log => {
+            const timeValue = log.created_at || log.timestamp || log.createdAt || log.time;
+            const logItem = `
+                <div class="timeline-item" style="border-left: 2px solid #4dacff; margin-left: 10px; padding: 0 0 20px 20px; position: relative;">
+                    <div style="position: absolute; left: -7px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: #4dacff;"></div>
+                    <div class="card" style="padding: 15px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h4 style="margin: 0; color: var(--text-primary); font-size: 0.95rem;">${log.description || 'Hành động hệ thống'}</h4>
+                            <span style="font-size: 0.8rem; color: var(--text-secondary); background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 4px;">${formatTime(timeValue)}</span>
+                        </div>
+                        <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">Phân loại: <span style="color: var(--text-primary);">${log.type || 'Hệ thống'}</span></p>
+                    </div>
+                </div>`;
+            timeline.innerHTML += logItem;
+        });
+        logContainer.appendChild(timeline);
+    }
+
+    function renderEmptyLogs() {
+        logContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-secondary);"><i class="fa-solid fa-file-signature" style="font-size:30px; opacity:0.5;"></i><p>Không có dữ liệu lịch sử nào.</p></div>';
+    }
+
+    function populateTypeFilter(logsData) {
+        const types = new Set();
+        logsData.forEach(log => { if (log.type) types.add(log.type.trim()); });
+        filterType.innerHTML = '<option value="all">Tất cả hoạt động</option>';
+        types.forEach(type => {
+            const opt = document.createElement('option');
+            opt.value = type.toLowerCase();
+            opt.textContent = type;
+            filterType.appendChild(opt);
+        });
+    }
+
+    // Các hàm filterDate, applyFilters, formatTime bạn giữ nguyên như cũ...
+    filterDate.addEventListener('change', applyFiltersLogs);
+    filterType.addEventListener('change', applyFiltersLogs);
+    resetFilterBtn.onclick = () => { filterDate.value = ''; filterType.value = 'all'; renderLogs(allLogs); };
+
+    function applyFiltersLogs() {
+        let filtered = allLogs;
+        const dateVal = filterDate.value;
+        const typeVal = filterType.value;
+
+        if (dateVal) {
+            filtered = filtered.filter(log => {
+                const logTime = log.created_at || log.timestamp || log.createdAt || log.time;
+                return new Date(logTime).toISOString().split('T')[0] === dateVal;
+            });
+        }
+        if (typeVal !== 'all') {
+            filtered = filtered.filter(log => log.type && log.type.toLowerCase() === typeVal);
+        }
+        renderLogs(filtered);
+    }
+
+    function formatTime(isoString) {
+        if (!isoString) return '--:--';
+        const d = new Date(isoString);
+        return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString('vi-VN');
     }
 
     loadDashboard();
