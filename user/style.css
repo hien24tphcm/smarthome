@@ -56,6 +56,17 @@ body { background-color: var(--bg-main); color: var(--text-primary); overflow-x:
 /* =========================================
    4. THÀNH PHẦN GIAO DIỆN (UI COMPONENTS)
 ========================================= */
+#filter-type {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            color-scheme: dark light; /* Báo cho trình duyệt biết mình có hỗ trợ dark mode */
+        }
+        
+        #filter-type option {
+            background-color: var(--card-bg); /* Nền tối/sáng theo theme */
+            color: var(--text-primary);       /* Chữ sáng/tối theo theme */
+            padding: 10px;
+        }
 /* --- Thẻ chung (Cards) --- */
 .card { background-color: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 25px; transition: transform 0.2s, box-shadow 0.2s; }
 .card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
@@ -182,3 +193,20 @@ input:checked + .slider:before { transform: translateX(22px); }
     .timeline-content { margin-left: 10px; padding: 15px; }
     .log-header { flex-direction: column; gap: 5px; }
 }
+
+   .dashboard-section { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 20px; margin-bottom: 30px; }
+   .section-heading { color: #fff; margin-top: 0; margin-bottom: 20px; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 12px; }
+   .section-heading i { color: #4dacff; }
+   #charts-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px; }
+   .empty-text { color: #555; font-style: italic; width: 100%; padding: 10px 0; }
+
+   /* --- CSS MỚI CHO MENU THÔNG BÁO DROPDOWN --- */
+   .user-actions { position: relative; }
+   .notif-dropdown { display: none; position: absolute; top: 50px; right: 40px; width: 320px; background: #1e1e2d; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); z-index: 1000; padding: 15px; }
+   .notif-dropdown.show { display: block; animation: fadeIn 0.2s ease; }
+   .notif-dropdown h4 { margin: 0 0 10px 0; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 15px; color: #fff;}
+   .notif-item { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; color: #ccc; display: flex; gap: 12px; align-items: start;}
+   .notif-item:last-child { border-bottom: none; padding-bottom: 0; }
+   .notif-item i.alert { color: #ff6b6b; font-size: 16px; margin-top: 2px;}
+   .notif-item i.info { color: #4dacff; font-size: 16px; margin-top: 2px;}
+   @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
