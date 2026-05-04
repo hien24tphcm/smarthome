@@ -3,11 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lịch sử - MyHome Dark Mode</title>
+    <title>Lịch sử - MyHome</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- CSS CHO NÚT ĐỔI MÀU SÁNG TỐI --- */
+        .theme-toggle {
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            transition: color 0.3s;
+        }
+        .theme-toggle:hover { color: var(--text-primary); }
+        
+        /* Ghi đè biến hệ thống cho Chế độ Sáng (Light Mode) */
+        body.light-mode {
+            --bg-color: #f4f7fe;
+            --card-bg: #ffffff;
+            --text-primary: #2b2b36;
+            --text-secondary: #6c7293;
+            --sidebar-bg: #ffffff;
+            --border-color: #e2e5ec;
+            --danger-color: #ff4d4d;
+        }
+        
+        body.light-mode .card, body.light-mode .dashboard-section {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+            border-color: var(--border-color);
+        }
+
+        /* --- ÉP NỀN TRẮNG DỨT ĐIỂM CHO LIGHT MODE --- */
+        body.light-mode,
+        body.light-mode .dashboard-container,
+        body.light-mode .main-content,
+        body.light-mode .page-content {
+            background-color: #f4f7fe !important;
+            color: #2b2b36 !important;
+        }
+
+        body.light-mode .sidebar { border-right: 1px solid var(--border-color); box-shadow: 2px 0 10px rgba(0,0,0,0.02); }
+        body.light-mode .header { border-bottom: 1px solid var(--border-color); background: #f4f7fe !important; }
+        body.light-mode .timeline-content { box-shadow: 0 4px 15px rgba(0,0,0,0.03); border-color: var(--border-color); background: var(--card-bg); }
+
+        /* --- CSS CHO DROPDOWN CHUÔNG THÔNG BÁO --- */
+        .notif-dropdown { display: none; }
+        .notif-dropdown.show { display: block; }
+    </style>
 </head>
-<body>
+<body class="dark-mode">
     <div class="dashboard-container">
         
         <aside class="sidebar">
@@ -18,7 +61,6 @@
             <nav class="menu">
                 <a href="index.html"><i class="fa-solid fa-border-all"></i> Tổng quan</a>
                 <a href="history.html" class="active"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử</a>
-                <a href="settings.html"><i class="fa-solid fa-gear"></i> Cài đặt</a>
             </nav>
         </aside>
 
@@ -29,134 +71,307 @@
                     <h3>Lịch sử hoạt động</h3>
                 </div>
                 <div class="user-actions">
-                    <div class="notification"><i class="fa-solid fa-bell"></i></div>
-                    <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+                    <!-- Nút Dark/Light Mode -->
+                    <div class="theme-toggle" id="theme-toggle" title="Đổi giao diện">
+                        <i class="fa-solid fa-moon"></i>
+                    </div>
+
+                    <!-- ĐÃ SỬA: Thêm ID và khung cho chuông thông báo để JS không bị lỗi -->
+                    <div class="notification" id="notif-bell" style="position: relative; cursor: pointer;">
+                        <i class="fa-solid fa-bell"></i>
+                        <div id="notif-dropdown" class="notif-dropdown" style="position: absolute; right: 0; top: 35px; width: 320px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); z-index: 100; text-align: left;">
+                            <div style="padding: 12px; font-weight: bold; border-bottom: 1px solid var(--border-color); text-align: center; color: var(--text-primary);">Thông báo hệ thống</div>
+                            <div id="notif-list" style="max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+
+                    <div class="user-avatar" onclick="API.logout()" style="cursor:pointer;"><i class="fa-solid fa-right-from-bracket"></i></div>
                 </div>
             </header>
 
             <div class="page-content">
-                <div class="timeline-container">
-                    
-                    <div class="timeline-date-badge">Hôm nay</div>
-                    
-                    <div class="timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-icon"><i class="fa-solid fa-lightbulb"></i></div>
-                            <div class="timeline-content card">
-                                <div class="log-header">
-                                    <h4>Bạn đã bật <strong>Đèn trần Phòng khách</strong></h4>
-                                    <span class="time">14:05</span>
-                                </div>
-                                <p class="log-desc">Phương thức: Điều khiển thủ công qua App</p>
-                            </div>
-                        </div>
-
-                        <div class="timeline-item">
-                            <div class="timeline-icon off"><i class="fa-solid fa-fan"></i></div>
-                            <div class="timeline-content card">
-                                <div class="log-header">
-                                    <h4>Bạn đã tắt <strong>Máy lạnh Phòng ngủ</strong></h4>
-                                    <span class="time">12:30</span>
-                                </div>
-                                <p class="log-desc">Phương thức: Điều khiển thủ công qua App</p>
-                            </div>
-                        </div>
+                <!-- THANH CÔNG CỤ LỌC -->
+                <div class="filters-container" style="display: flex; gap: 15px; margin-bottom: 20px; padding: 15px; background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color); flex-wrap: wrap;">
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label for="filter-date" style="color: var(--text-secondary); font-size: 0.9rem;">Lọc theo ngày:</label>
+                        <input type="date" id="filter-date" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-color); color: var(--text-primary); outline: none;">
                     </div>
-
-                    <div class="timeline-date-badge mt-4">Hôm qua</div>
-                    
-                    <div class="timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-icon system"><i class="fa-solid fa-moon"></i></div>
-                            <div class="timeline-content card">
-                                <div class="log-header">
-                                    <h4>Hệ thống kích hoạt <strong>Chế độ ban đêm</strong></h4>
-                                    <span class="time">22:00</span>
-                                </div>
-                                <p class="log-desc">Tự động tắt đèn và khóa cửa chính</p>
-                            </div>
-                        </div>
-
-                        <div class="timeline-item">
-                            <div class="timeline-icon alert"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                            <div class="timeline-content card alert-border">
-                                <div class="log-header">
-                                    <h4 style="color: var(--danger-color);">Cảnh báo nhiệt độ <strong>Nhà Bếp</strong> vượt ngưỡng!</h4>
-                                    <span class="time">18:45</span>
-                                </div>
-                                <p class="log-desc">Nhiệt độ ghi nhận: 45°C. Đã gửi thông báo đẩy.</p>
-                            </div>
-                        </div>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label for="filter-type" style="color: var(--text-secondary); font-size: 0.9rem;">Lọc theo loại:</label>
+                        <select id="filter-type" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-color); color: var(--text-primary); outline: none; min-width: 150px;">
+                            <option value="all">Tất cả</option>
+                            <!-- Các option sẽ được render tự động bằng JS -->
+                        </select>
                     </div>
+                    <div style="display: flex; align-items: flex-end;">
+                        <button id="reset-filter" style="padding: 9px 15px; border-radius: 5px; background: var(--text-secondary); color: white; border: none; cursor: pointer; transition: 0.3s;">
+                            <i class="fa-solid fa-rotate-right"></i> Xóa bộ lọc
+                        </button>
+                    </div>
+                </div>
 
+                <!-- KHU VỰC HIỂN THỊ LOGS -->
+                <div class="timeline-container" id="log-display-area">
+                    <div class="loading-text" style="text-align: center; color: var(--text-secondary); margin-top: 50px;">
+                        <i class="fas fa-spinner fa-spin"></i> Đang tải nhật ký hệ thống...
+                    </div>
                 </div>
             </div>
         </main>
     </div>
-    <div class="page-content">
-    <div class="timeline-container" id="log-display-area">
-        <div class="loading-text" style="text-align: center; color: var(--text-secondary);">
-            <i class="fas fa-spinner fa-spin"></i> Đang tải nhật ký hệ thống...
-        </div>
-    </div>
-</div>
 
     <script src="api.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', async () => {
+        // --- XỬ LÝ GIAO DIỆN SÁNG/TỐI (DARK/LIGHT MODE) ---
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+        
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        if (currentTheme === 'light') {
+            body.classList.add('light-mode');
+            themeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            body.classList.toggle('light-mode');
+            if (body.classList.contains('light-mode')) {
+                localStorage.setItem('theme', 'light');
+                themeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+            } else {
+                localStorage.setItem('theme', 'dark');
+                themeToggle.innerHTML = '<i class="fa-solid fa-moon"></i>';
+            }
+        });
+
+        // --- XỬ LÝ CHUÔNG THÔNG BÁO ---
+        const notifBell = document.getElementById('notif-bell');
+        const notifDropdown = document.getElementById('notif-dropdown');
+        const notifList = document.getElementById('notif-list');
+
+        notifBell.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            notifDropdown.classList.toggle('show');
+            
+            if (notifDropdown.classList.contains('show')) {
+                notifList.innerHTML = '<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+                try {
+                    const logs = await API.getLogs(5);
+                    notifList.innerHTML = '';
+                    if (!logs || logs.length === 0) {
+                        notifList.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-secondary);">Không có thông báo mới</div>';
+                        return;
+                    }
+                    
+                    logs.forEach(log => {
+                        const descLowerCase = log.description ? log.description.toLowerCase() : '';
+                        const isAlert = descLowerCase.includes('cảnh báo') || descLowerCase.includes('vượt ngưỡng') || descLowerCase.includes('deleted');
+                        const icon = isAlert ? '<i class="fa-solid fa-triangle-exclamation alert" style="color: var(--danger-color);"></i>' : '<i class="fa-solid fa-circle-info info" style="color: #4dacff;"></i>';
+
+                        const timeValue = log.created_at || log.timestamp || log.createdAt || log.time;
+                        let displayTime = 'Chưa có thời gian';
+                        
+                        if (timeValue) {
+                            let safeString = String(timeValue);
+                            if (safeString.includes('T') && !safeString.endsWith('Z') && !safeString.match(/[+-]\d{2}:\d{2}$/)) {
+                                safeString += 'Z'; 
+                            }
+                            const dateObj = new Date(safeString);
+                            
+                            if (!isNaN(dateObj.getTime())) {
+                                const timeStr = dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                                const dateStr = dateObj.toLocaleDateString('vi-VN');
+                                displayTime = `${timeStr} - ${dateStr}`; 
+                            }
+                        }
+
+                        notifList.innerHTML += `
+                            <div class="notif-item" style="display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border-color);">
+                                <div style="font-size: 1.2rem; margin-top: 2px;">${icon}</div>
+                                <div>
+                                    <div style="line-height: 1.4; color: var(--text-primary); font-size: 0.95rem;">${log.description || 'Hành động hệ thống'}</div>
+                                    <small style="color:var(--text-secondary); margin-top:5px; display:flex; align-items: center; gap: 5px;">
+                                        <i class="fa-regular fa-clock"></i> ${displayTime}
+                                    </small>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } catch (err) {
+                    notifList.innerHTML = '<div style="padding:10px;text-align:center;color:var(--danger-color);">Lỗi tải thông báo</div>';
+                }
+            }
+        });
+
+        // Ẩn thông báo khi click ra ngoài
+        document.addEventListener('click', (e) => {
+            if (!notifBell.contains(e.target)) {
+                notifDropdown.classList.remove('show');
+            }
+        });
+
+        // --- XỬ LÝ LOAD VÀ LỌC LỊCH SỬ ---
         const logContainer = document.getElementById('log-display-area');
+        const filterDate = document.getElementById('filter-date');
+        const filterType = document.getElementById('filter-type');
+        const resetFilterBtn = document.getElementById('reset-filter');
+        
+        let allLogs = [];
 
         async function loadSystemHistory() {
-            // 1. Gọi API từ endpoint /api/v1/logs (Sử dụng hàm sendRequest trong api.js của bạn)
-            // Dựa trên tài liệu của bạn, đây là kết quả của lệnh LEFT JOIN phức tạp
-            const logs = await API.getLogs(); 
+            try {
+                const logs = await API.getLogs(); 
 
-            if (logs && logs.length > 0) {
-                logContainer.innerHTML = ''; // Xóa dòng "Loading..."
+                if (logs && logs.length > 0) {
+                    allLogs = logs;
+                    populateTypeFilter(allLogs);
+                    renderLogs(allLogs);         
+                } else {
+                    renderEmptyState();
+                }
+            } catch (error) {
+                logContainer.innerHTML = `
+                    <div style="text-align: center; padding: 50px; color: var(--danger-color, #ff4d4d);">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 40px; margin-bottom: 15px;"></i>
+                        <p>Không thể tải nhật ký. Vui lòng kiểm tra kết nối Backend.</p>
+                    </div>`;
+            }
+        }
 
-                // Group logs theo ngày (tùy chọn để hiển thị đẹp hơn)
-                const timeline = document.createElement('div');
-                timeline.className = 'timeline';
+        function renderLogs(logsData) {
+            logContainer.innerHTML = ''; 
+            
+            if (!logsData || logsData.length === 0) {
+                renderEmptyState();
+                return;
+            }
 
-            // Trong hàm loadSystemHistory()
-            logs.forEach(log => {
-                // BE trả về 'description' chứ không phải 'message'
-                // BE trả về 'created_at' chứ không phải 'timestamp'
+            const timeline = document.createElement('div');
+            timeline.className = 'timeline';
+
+            logsData.forEach(log => {
+                const timeValue = log.created_at || log.timestamp || log.createdAt || log.time;
+
                 const logItem = `
                     <div class="timeline-item">
-                        <div class="timeline-icon ${log.log_type || 'system'}">
-                            <i class="fa-solid fa-circle-info"></i>
+                        <div class="timeline-icon system">
+                            <i class="fa-solid fa-circle-info" style="color: #4dacff;"></i>
                         </div>
-                        <div class="timeline-content card">
-                            <div class="log-header">
-                                <h4>${log.description}</h4> 
-                                <span class="time">${formatTime(log.created_at)}</span>
+                        <div class="timeline-content card" style="padding: 15px;">
+                            <div class="log-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="color: var(--text-primary); margin: 0; font-size: 1rem;">${log.description || log.action || 'Không rõ hành động'}</h4> 
+                                <span class="time" style="background: rgba(126, 130, 153, 0.1); padding: 4px 10px; border-radius: 6px; color: var(--text-secondary); font-size: 0.85rem;">${formatTime(timeValue)}</span>
                             </div>
-                            <p class="log-desc">Hệ thống MyHome</p>
+                            <p class="log-desc" style="color: var(--text-secondary); margin-top: 8px; font-size: 0.9rem;">Loại: <strong style="color: var(--text-primary);">${log.type || 'Hệ thống'}</strong></p>
                         </div>
                     </div>
                 `;
                 timeline.innerHTML += logItem;
             });
-                logContainer.appendChild(timeline);
-            } else {
-                logContainer.innerHTML = '<p style="text-align:center;">Không có lịch sử hoạt động.</p>';
-            }
+            logContainer.appendChild(timeline);
         }
 
-        // Hàm chọn Icon dựa trên Category từ DB (sensors/controllers)
-        function getIconByDevice(category) {
-            if (category === 'sensors') return 'fa-solid fa-microchip';
-            if (category === 'controllers') return 'fa-solid fa-toggle-on';
-            return 'fa-solid fa-clock-rotate-left';
+        function renderEmptyState() {
+            logContainer.innerHTML = `
+                <div style="text-align: center; padding: 50px; color: var(--text-secondary);">
+                    <i class="fa-solid fa-file-signature" style="font-size: 40px; margin-bottom: 15px;"></i>
+                    <p>Không tìm thấy lịch sử hoạt động phù hợp.</p>
+                </div>`;
         }
+
+        function populateTypeFilter(logsData) {
+            const types = new Set();
+            logsData.forEach(log => {
+                if (log.type) types.add(log.type.toLowerCase().trim());
+            });
+
+            filterType.innerHTML = '<option value="all">Tất cả hoạt động</option>';
+            
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                
+                if (type === 'user action' || type === 'user_action') {
+                    option.textContent = '👨‍💻 Người dùng (User Action)';
+                } 
+                else if (type === 'admin action' || type === 'admin_action') {
+                    option.textContent = '🛡️ Quản trị viên (Admin Action)';
+                } 
+                else if (type === 'system') {
+                    option.textContent = '⚙️ Hệ thống (System)';
+                } 
+                else if (type === 'error') {
+                    option.textContent = '⚠️ Lỗi (Error)';
+                }
+                else {
+                    option.textContent = '🔹 ' + type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' '); 
+                }
+                
+                filterType.appendChild(option);
+            });
+        }
+
+        function applyFilters() {
+            let filteredLogs = allLogs;
+            const selectedDate = filterDate.value; 
+            const selectedType = filterType.value;
+
+            if (selectedDate) {
+                filteredLogs = filteredLogs.filter(log => {
+                    const timeValue = log.created_at || log.timestamp || log.createdAt || log.time;
+                    if (!timeValue) return false;
+                    
+                    try {
+                        let safeString = String(timeValue);
+                        if (safeString.includes('T') && !safeString.endsWith('Z') && !safeString.match(/[+-]\d{2}:\d{2}$/)) {
+                            safeString += 'Z'; 
+                        }
+                        
+                        const logDateObj = new Date(safeString);
+                        if (isNaN(logDateObj.getTime())) return false;
+                        
+                        const logDate = logDateObj.getFullYear() + '-' + 
+                                       String(logDateObj.getMonth() + 1).padStart(2, '0') + '-' + 
+                                       String(logDateObj.getDate()).padStart(2, '0');
+                                       
+                        return logDate === selectedDate;
+                    } catch (e) {
+                        return false;
+                    }
+                });
+            }
+
+            if (selectedType !== 'all') {
+                filteredLogs = filteredLogs.filter(log => {
+                    if (!log.type) return false;
+                    return log.type.toLowerCase().trim() === selectedType;
+                });
+            }
+
+            renderLogs(filteredLogs);
+        }
+
+        filterDate.addEventListener('change', applyFilters);
+        filterType.addEventListener('change', applyFilters);
+        resetFilterBtn.addEventListener('click', () => {
+            filterDate.value = '';
+            filterType.value = 'all';
+            renderLogs(allLogs); 
+        });
 
         function formatTime(isoString) {
-            const date = new Date(isoString);
-            return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            if (!isoString) return 'Chưa có dữ liệu ngày'; 
+            let safeString = String(isoString);
+            
+            if (safeString.includes('T') && !safeString.endsWith('Z') && !safeString.match(/[+-]\d{2}:\d{2}$/)) {
+                safeString += 'Z'; 
+            }
+            const date = new Date(safeString);
+            if (isNaN(date.getTime())) return 'Định dạng thời gian lỗi'; 
+            
+            return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' - ' + date.toLocaleDateString('vi-VN');
         }
 
-        // Khởi chạy
         loadSystemHistory();
     });
     </script>
