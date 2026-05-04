@@ -3,11 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tổng quan - MyHome Dark Mode</title>
+    <title>Tổng quan - MyHome</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Bổ sung CSS cho phần khung và Layout */
+        .dashboard-section {
+            background: var(--card-bg, rgba(255, 255, 255, 0.02));
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+        .section-heading {
+            color: var(--text-primary, #fff);
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+            padding-bottom: 12px;
+        }
+        .section-heading i { color: #4dacff; }
+        #charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .empty-text {
+            color: #555;
+            font-style: italic;
+            width: 100%;
+            padding: 10px 0;
+        }
+
+        /* --- CSS CHO MENU THÔNG BÁO --- */
+        .user-actions { position: relative; display: flex; align-items: center; gap: 15px; }
+        .notif-dropdown {
+            display: none; position: absolute; top: 50px; right: 40px; width: 320px;
+            background: var(--bg-color, #1e1e2d); border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); z-index: 1000; padding: 15px;
+        }
+        .notif-dropdown.show { display: block; animation: fadeIn 0.2s ease; }
+        .notif-dropdown h4 { margin: 0 0 10px 0; padding-bottom: 10px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); font-size: 15px; color: var(--text-primary, #fff);}
+        .notif-item { padding: 12px 0; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.05)); font-size: 13px; color: var(--text-secondary, #ccc); display: flex; gap: 12px; align-items: start;}
+        .notif-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .notif-item i.alert { color: #ff6b6b; font-size: 16px; margin-top: 2px;}
+        .notif-item i.info { color: #4dacff; font-size: 16px; margin-top: 2px;}
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- CSS CHO NÚT ĐỔI MÀU SÁNG TỐI --- */
+        .theme-toggle {
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            transition: color 0.3s;
+        }
+        .theme-toggle:hover { color: var(--text-primary); }
+        
+        /* Ghi đè biến hệ thống cho Chế độ Sáng (Light Mode) */
+        body.light-mode {
+            --bg-color: #f4f7fe;
+            --card-bg: #ffffff;
+            --text-primary: #2b2b36;
+            --text-secondary: #6c7293;
+            --sidebar-bg: #ffffff;
+            --border-color: #e2e5ec;
+            --danger-color: #ff4d4d;
+        }
+        body.light-mode .card, body.light-mode .dashboard-section {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+            border-color: var(--border-color);
+        }
+        /* Ép nền đen ở giữa thành màu trắng/xám nhạt khi bật Light Mode */
+        body.light-mode,
+        body.light-mode .main-content,
+        body.light-mode .page-content {
+            background-color: var(--bg-color, #f4f7fe) !important;
+        }
+        body.light-mode .sidebar { border-right: 1px solid var(--border-color); box-shadow: 2px 0 10px rgba(0,0,0,0.02); }
+        body.light-mode .header { border-bottom: 1px solid var(--border-color); background: var(--bg-color); }
+        body.light-mode .notif-dropdown { background: var(--card-bg); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        body.light-mode .filter-btn { background: #e9ecf3; color: var(--text-secondary); }
+        body.light-mode .filter-btn.active { background: #4dacff; color: #fff; }
+        body.light-mode .temp-ring { border-color: #e2e5ec; }
+    </style>
 </head>
-<body>
+<body class="dark-mode">
     <div class="dashboard-container">
         <aside class="sidebar">
             <div class="logo">
@@ -17,8 +104,7 @@
             <nav class="menu">
                 <a href="index.html" class="active"><i class="fa-solid fa-border-all"></i> Tổng quan</a>
                 <a href="history.html"><i class="fa-solid fa-clock-rotate-left"></i> Lịch sử</a>
-                <a href="settings.html"><i class="fa-solid fa-gear"></i> Cài đặt</a>
-            </nav>
+                </nav>
         </aside>
 
         <main class="main-content">
@@ -28,143 +114,270 @@
                     <h3>Nhà của bạn</h3>
                 </div>
                 <div class="user-actions">
-                    <div class="notification has-alert"><i class="fa-solid fa-bell"></i></div>
-                    <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+                    <div class="theme-toggle" id="theme-toggle" title="Đổi giao diện">
+                        <i class="fa-solid fa-moon"></i>
+                    </div>
+
+                    <div class="notification has-alert" id="notif-bell" style="cursor: pointer;"><i class="fa-solid fa-bell"></i></div>
+                    
+                    <div class="notification" id="notif-bell" style="position: relative; cursor: pointer;">
+                        <i class="fa-solid fa-bell"></i>
+                        <div id="notif-dropdown" class="notif-dropdown" style="position: absolute; right: 0; top: 35px; width: 320px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); z-index: 100; text-align: left;">
+                            <div style="padding: 12px; font-weight: bold; border-bottom: 1px solid var(--border-color); text-align: center; color: var(--text-primary);">Thông báo hệ thống</div>
+                            <div id="notif-list" style="max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+
+                    <div class="user-avatar" onclick="API.logout()" style="cursor: pointer;" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket"></i></div>
                 </div>
             </header>
 
             <div class="page-content">
-                <div class="room-filter-bar">
+                <div class="room-filter-bar" id="room-filter-bar">
                     <button class="filter-btn active" data-filter="all">Tất cả</button>
-                    <button class="filter-btn" data-filter="living-room">Phòng Khách</button>
-                    <button class="filter-btn" data-filter="kitchen">Nhà Bếp</button>
-                    <button class="filter-btn" data-filter="bedroom">Phòng Ngủ</button>
+                </div>
+
+                <div id="loading-container" style="text-align: center; padding: 50px; color: var(--text-secondary);">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 30px; margin-bottom: 15px;"></i>
+                    <p>Đang tải dữ liệu thiết bị...</p>
                 </div>
                 
-                <div class="widget-grid" id="device-container">
-                    <div class="card room-status-card widget-item" data-room="living-room">
-                        <div class="room-info">
-                            <h2>Phòng Khách</h2>
-                            <p class="humidity"><i class="fa-solid fa-droplet"></i> Độ ẩm: 45%</p>
-                        </div>
-                        <div class="temp-ring">
-                            <div class="temp-inner">24&deg;</div>
-                        </div>
-                    </div>
-
-                    <div class="card device-card widget-item" data-room="living-room">
-                        <div class="device-info">
-                            <div class="icon-box"><i class="fa-solid fa-lightbulb"></i></div>
-                            <div class="device-name">Đèn trần <br><small class="text-muted">Phòng khách</small></div>
-                        </div>
-                        <label class="switch"><input type="checkbox" checked><span class="slider round"></span></label>
-                    </div>
-
-                    <div class="card device-card fan-card widget-item" data-room="living-room">
-                        <div class="fan-top-row">
-                            <div class="device-info">
-                                <div class="icon-box"><i class="fa-solid fa-fan"></i></div>
-                                <div class="device-name">Quạt máy<br><small class="text-muted">Phòng khách</small></div>
-                            </div>
-                            <div class="controls-wrapper">
-                                <div class="mode-control">
-                                    <button class="mode-btn " data-mode="auto">Auto</button>
-                                    <button class="mode-btn active" data-mode="manual">Thủ công</button>
-                                </div>
-                                <label class="switch"><input type="checkbox" id="fan-switch"><span class="slider round"></span></label>
-                            </div>
-                        </div>
-                        <input type="range" min="0" max="100" value="70" class="range-slider" id="fan-slider">
-                    </div>
-
-                    <div class="card door-card widget-item" data-room="living-room">
-                        <h2>Cửa chính</h2>
-                        <div class="door-actions">
-                            <button class="door-btn active"><i class="fa-solid fa-lock-open"></i> Mở</button>
-                            <button class="door-btn"><i class="fa-solid fa-lock"></i> Đóng</button>
-                        </div>
-                    </div>
-
-                    <div class="card room-status-card alert-danger widget-item" data-room="kitchen">
-                        <div class="room-info">
-                            <h2>Nhà Bếp</h2>
-                            <p class="humidity" style="color: var(--danger-color);"><i class="fa-solid fa-fire"></i> Vượt ngưỡng!</p>
-                        </div>
-                        <div class="temp-ring" style="background: conic-gradient(var(--danger-color) 0% 100%, transparent 100% 100%);">
-                            <div class="temp-inner" style="color: var(--danger-color);">45&deg;</div>
-                        </div>
-                    </div>
+                <div class="dashboard-section" id="section-sensors" style="display: none;">
+                    <h3 class="section-heading"><i class="fa-solid fa-chart-area"></i> Thông số môi trường</h3>
+                    <div class="widget-grid" id="sensor-container"></div>
+                    <div id="charts-container"></div>
                 </div>
+
+                <div class="dashboard-section" id="section-controllers" style="display: none;">
+                    <h3 class="section-heading"><i class="fa-solid fa-gamepad"></i> Điều khiển Thiết bị </h3>
+                    <div class="widget-grid" id="controller-container"></div>
+                </div>
+
             </div>
         </main>
     </div>
+
 <script src="api.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
-    const deviceContainer = document.getElementById('device-container');
-
-    // --- 1. HÀM RENDER THIẾT BỊ ---
-    async function loadDashboard() {
-        try {
-            const devices = await API.getDevices();
-            if (!devices || devices.length === 0) {
-                deviceContainer.innerHTML = '<p>Không tìm thấy thiết bị nào.</p>';
-                return;
-            }
-
-            deviceContainer.innerHTML = ''; // Xóa trạng thái loading
-
-            devices.forEach(device => {
-                if (device.type === 'controller') {
-                    // Nếu là Quạt (hoặc thiết bị có điều tốc)
-                    if (device.name.toLowerCase().includes('quạt')) {
-                        renderFanCard(device);
-                    } else {
-                        renderLightCard(device);
-                    }
-                } else if (device.type === 'sensor') {
-                    renderSensorCard(device);
-                }
-            });
-            
-            setupFilters(); // Cài đặt lại bộ lọc sau khi render xong
-        } catch (err) {
-            deviceContainer.innerHTML = '<p>Lỗi kết nối Backend. Vui lòng đăng nhập lại.</p>';
-        }
+    // --- XỬ LÝ GIAO DIỆN SÁNG/TỐI (DARK/LIGHT MODE) ---
+    const themeToggle = document.getElementById('theme-toggle');
+    const body = document.body;
+    
+    const currentTheme = localStorage.getItem('theme') || 'dark';
+    if (currentTheme === 'light') {
+        body.classList.add('light-mode');
+        themeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
     }
 
-    // --- 2. CÁC TEMPLATE WIDGET ---
-    
-    // Template Đèn / Công tắc đơn
-    function renderLightCard(device) {
+    themeToggle.addEventListener('click', () => {
+        body.classList.toggle('light-mode');
+        if (body.classList.contains('light-mode')) {
+            localStorage.setItem('theme', 'light');
+            themeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+        } else {
+            localStorage.setItem('theme', 'dark');
+            themeToggle.innerHTML = '<i class="fa-solid fa-moon"></i>';
+        }
+    });
+
+    const loadingContainer = document.getElementById('loading-container');
+    const sectionSensors = document.getElementById('section-sensors');
+    const sectionControllers = document.getElementById('section-controllers');
+    const sensorContainer = document.getElementById('sensor-container');
+    const chartsContainer = document.getElementById('charts-container');
+    const controllerContainer = document.getElementById('controller-container');
+    const filterBar = document.getElementById('room-filter-bar');
+
+    // --- XỬ LÝ DROPDOWN THÔNG BÁO ---
+    const notifBell = document.getElementById('notif-bell');
+    const notifDropdown = document.getElementById('notif-dropdown');
+    const notifList = document.getElementById('notif-list');
+
+    notifBell.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        notifDropdown.classList.toggle('show');
+        
+        if (notifDropdown.classList.contains('show')) {
+            notifList.innerHTML = '<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+            try {
+                const logs = await API.getLogs(5);
+                notifList.innerHTML = '';
+                if (!logs || logs.length === 0) {
+                    notifList.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-secondary);">Không có thông báo mới</div>';
+                    return;
+                }
+                
+                logs.forEach(log => {
+                    const descLowerCase = log.description ? log.description.toLowerCase() : '';
+                    const isAlert = descLowerCase.includes('cảnh báo') || descLowerCase.includes('vượt ngưỡng') || descLowerCase.includes('deleted');
+                    const icon = isAlert ? '<i class="fa-solid fa-triangle-exclamation alert" style="color: var(--danger-color);"></i>' : '<i class="fa-solid fa-circle-info info" style="color: #4dacff;"></i>';
+
+                    const timeValue = log.created_at || log.timestamp || log.createdAt || log.time;
+                    let displayTime = 'Chưa có thời gian';
+                    
+                    if (timeValue) {
+                        let safeString = String(timeValue);
+                        if (safeString.includes('T') && !safeString.endsWith('Z') && !safeString.match(/[+-]\d{2}:\d{2}$/)) {
+                            safeString += 'Z'; 
+                        }
+                        const dateObj = new Date(safeString);
+                        
+                        if (!isNaN(dateObj.getTime())) {
+                            const timeStr = dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                            const dateStr = dateObj.toLocaleDateString('vi-VN');
+                            displayTime = `${timeStr} - ${dateStr}`; 
+                        }
+                    }
+
+                    notifList.innerHTML += `
+                        <div class="notif-item" style="display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border-color);">
+                            <div style="font-size: 1.2rem; margin-top: 2px;">${icon}</div>
+                            <div>
+                                <div style="line-height: 1.4; color: var(--text-primary); font-size: 0.95rem;">${log.description || 'Hành động hệ thống'}</div>
+                                <small style="color:var(--text-secondary); margin-top:5px; display:flex; align-items: center; gap: 5px;">
+                                    <i class="fa-regular fa-clock"></i> ${displayTime}
+                                </small>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                notifList.innerHTML = '<div style="padding:10px;text-align:center;color:var(--danger-color);">Lỗi tải thông báo</div>';
+            }
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!notifBell.contains(e.target) && !notifDropdown.contains(e.target)) notifDropdown.classList.remove('show');
+    });
+
+    // --- HÀM TẢI DASHBOARD TỪ BACKEND THẬT ---
+    async function loadDashboard() {
+        let zones = [];
+        let devices = [];
+        
+        try {
+            [zones, devices] = await Promise.all([ API.getZones(), API.getDevices() ]);
+        } catch (e) {
+            loadingContainer.innerHTML = '<p style="color: var(--danger-color);">Lỗi kết nối Backend. Vui lòng kiểm tra lại server.</p>';
+            return;
+        }
+        
+        loadingContainer.style.display = 'none';
+
+        if (zones && zones.length > 0) {
+            zones.forEach(zone => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.dataset.filter = `room-${zone.id}`;
+                btn.innerText = zone.room;
+                filterBar.appendChild(btn);
+            });
+        }
+
+        sectionSensors.style.display = 'block';
+        sectionControllers.style.display = 'block';
+
+        let hasSensor = false;
+        let hasController = false;
+
+        if (devices && devices.length > 0) {
+            devices.forEach(device => {
+                if (device.type === 'controller') {
+                    hasController = true;
+                    const isFan = device.name.toLowerCase().includes('quạt') || device.feed_id.toLowerCase().includes('fan') || device.mode !== undefined || device.speed !== undefined;
+                    if (isFan) renderFanCard(device, controllerContainer);
+                    else renderLightCard(device, controllerContainer);
+                } else if (device.type === 'sensor') {
+                    hasSensor = true;
+                    renderSensorCard(device, sensorContainer);
+                    renderSensorChart(device); 
+                }
+            });
+        }
+
+        if (!hasSensor) {
+            renderEmptySensorCard('Nhiệt độ');
+            renderEmptySensorCard('Độ ẩm');
+            renderEmptyChart('Nhiệt độ', 'fa-temperature-half', '#ff6b6b');
+            renderEmptyChart('Độ ẩm', 'fa-droplet', '#4dacff');
+        }
+
+        if (!hasController) {
+            controllerContainer.innerHTML = '<p class="empty-text widget-item" data-room="all">Chưa có thiết bị điều khiển nào được thêm vào hệ thống.</p>';
+        }
+
+        setupFilters();
+        setInterval(refreshDeviceStates, 2000); // Polling mỗi 2 giây
+    }
+
+    // =========================================================
+    // HÀM CHUẨN HÓA TRẠNG THÁI & RENDER CÁC THIẾT BỊ ĐIỀU KHIỂN
+    // =========================================================
+
+    // Hàm chuẩn hóa trạng thái giúp tránh nhận diện sai boolean/string
+    const checkIsOn = (status) => {
+        if (status === true || status === 1) return true;
+        const strStatus = String(status || '').toUpperCase();
+        return strStatus === 'ON' || strStatus === '1' || strStatus === 'TRUE';
+    };
+
+    function renderLightCard(device, container) {
         const card = document.createElement('div');
         card.className = 'card device-card widget-item';
-        card.setAttribute('data-room', 'living-room'); // Bạn có thể map từ device.zone_id nếu BE trả về
-        
+        card.setAttribute('data-room', `room-${device.zone_id}`);
+        card.setAttribute('data-device-id', device.id);
+        const isOn = checkIsOn(device.status);
+
         card.innerHTML = `
             <div class="device-info">
                 <div class="icon-box"><i class="fa-solid fa-lightbulb"></i></div>
-                <div class="device-name">${device.name}<br><small class="text-muted">ID: ${device.id}</small></div>
+                <div class="device-name">${device.name}<br><small class="text-muted">Phòng ID: ${device.zone_id}</small></div>
             </div>
             <label class="switch">
-                <input type="checkbox" class="toggle-btn" data-id="${device.id}" ${device.last_value == '1' ? 'checked' : ''}>
+                <input type="checkbox" class="toggle-btn" ${isOn ? 'checked' : ''}>
                 <span class="slider round"></span>
             </label>
         `;
-        
-        // Sự kiện Bật/Tắt
-        card.querySelector('.toggle-btn').addEventListener('change', async (e) => {
-            const action = e.target.checked ? 'on' : 'off';
-            await API.toggleDevice(device.id, action);
+
+        const toggle = card.querySelector('.toggle-btn');
+        toggle.addEventListener('change', async (e) => {
+            const isChecked = e.target.checked;
+            
+            // KHÓA CẬP NHẬT ĐỂ TRÁNH NHÁY NÚT VÀ KHÓA THAO TÁC LIÊN TỤC
+            card.setAttribute('data-updating', 'true');
+            toggle.disabled = true; 
+            
+            const action = isChecked ? 'on' : 'off';
+            try {
+                await API.toggleDevice(device.id, action);
+            } catch (err) {
+                alert(`Lỗi! Không thể điều khiển ${device.name}.`);
+                e.target.checked = !isChecked; 
+            } finally {
+                // Mở khóa sau 4.5 giây (Đủ thời gian để MQTT Backend đồng bộ)
+                setTimeout(() => {
+                    card.removeAttribute('data-updating');
+                    toggle.disabled = false;
+                }, 4500);
+            }
         });
-
-        deviceContainer.appendChild(card);
+        container.appendChild(card);
     }
-
-    // Template Quạt (Có Mode và Speed)
-    function renderFanCard(device) {
+function renderFanCard(device, container) {
         const card = document.createElement('div');
         card.className = 'card device-card fan-card widget-item';
+        card.setAttribute('data-room', `room-${device.zone_id}`);
+        card.setAttribute('data-device-id', device.id);
+        
+        // Cố định logic để quạt chỉ lấy trạng thái thực tế
+        const isFanOn = checkIsOn(device.status); 
+        const isAuto = device.mode === 'auto';
+        
+        // Mặc định lấy tốc độ từ DB, nếu không có thì để là 0 (Tương đương 33%)
+        const fanValue = device.speed != null ? parseInt(device.speed) : 0;
+        
         card.innerHTML = `
             <div class="fan-top-row">
                 <div class="device-info">
@@ -173,74 +386,389 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <div class="controls-wrapper">
                     <div class="mode-control">
-                        <button class="mode-btn ${device.mode === 'auto' ? 'active' : ''}" data-id="${device.id}" data-mode="auto">Auto</button>
-                        <button class="mode-btn ${device.mode === 'manual' ? 'active' : ''}" data-id="${device.id}" data-mode="manual">Thủ công</button>
+                        <button class="mode-btn ${isAuto ? 'active' : ''}" data-mode="auto">Auto</button>
+                        <button class="mode-btn ${!isAuto ? 'active' : ''}" data-mode="manual">Manual</button>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" class="fan-switch" data-id="${device.id}" ${device.last_value > 0 ? 'checked' : ''}>
+                        <input type="checkbox" class="fan-switch" ${isFanOn ? 'checked' : ''} ${isAuto ? 'disabled' : ''}>
                         <span class="slider round"></span>
                     </label>
                 </div>
             </div>
-            <input type="range" min="0" max="100" value="${device.speed || 0}" class="range-slider fan-slider" data-id="${device.id}">
+            <div style="margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 5px;">
+                    <span>Tốc độ</span>
+                    <span><span class="speed-text" style="color: var(--text-primary); font-weight: bold; font-size: 14px;">${fanValue}</span> / 2</span>
+                </div>
+                <!-- SLIDER 3 MỨC (0-2) -->
+                <input type="range" min="0" max="2" step="1" value="${fanValue}" class="range-slider fan-slider" ${isAuto ? 'disabled' : ''}>
+                <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-secondary); padding: 0 2px; margin-top: 4px;">
+                    <span>0 </span><span>1</span><span>2 </span>
+                </div>
+            </div>
         `;
 
-        // Logic điều khiển Mode
+        // 1. Lắng nghe sự kiện đổi chế độ Auto / Manual
         card.querySelectorAll('.mode-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const mode = btn.dataset.mode;
-                const success = await API.updateDeviceMode(device.id, mode);
-                if (success) {
+                card.setAttribute('data-updating', 'true');
+                try {
+                    await API.updateDeviceMode(device.id, mode);
+                    
                     card.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    // Vô hiệu hóa slider nếu là Auto
-                    card.querySelector('.fan-slider').disabled = (mode === 'auto');
+                    
+                    const isNowAuto = mode === 'auto';
+                    card.querySelector('.fan-slider').disabled = isNowAuto;
+                    card.querySelector('.fan-switch').disabled = isNowAuto;
+                } catch(err) { 
+                    alert("Lỗi khi đổi chế độ!"); 
+                } finally {
+                    setTimeout(() => card.removeAttribute('data-updating'), 4500);
                 }
             });
         });
 
-        // Logic Slider Tốc độ
-        card.querySelector('.fan-slider').addEventListener('change', async (e) => {
-            await API.setDeviceSpeed(device.id, e.target.value);
+        const fanSwitch = card.querySelector('.fan-switch');
+        const fanSlider = card.querySelector('.fan-slider');
+        const speedText = card.querySelector('.speed-text');
+        let ignoreFanSwitchEvent = false;
+
+        // 2. Lắng nghe sự kiện bật/tắt công tắc quạt
+        fanSwitch.addEventListener('change', async (e) => {
+            if (ignoreFanSwitchEvent) return;
+            const isChecked = e.target.checked;
+            card.setAttribute('data-updating', 'true');
+            fanSwitch.disabled = true; 
+            
+            try { 
+                // Chỉ gửi lệnh bật/tắt, giữ nguyên tốc độ thanh trượt
+                await API.toggleDevice(device.id, isChecked ? 'on' : 'off'); 
+            } catch (err) { 
+                alert(`Lỗi! Không thể bật/tắt Quạt.`); 
+                e.target.checked = !isChecked; 
+            } finally {
+                setTimeout(() => {
+                    card.removeAttribute('data-updating');
+                    fanSwitch.disabled = card.querySelector('.mode-btn[data-mode="auto"]').classList.contains('active');
+                }, 4500);
+            }
         });
 
-        deviceContainer.appendChild(card);
+        // 3. Lắng nghe sự kiện kéo Slider tốc độ
+        fanSlider.addEventListener('change', async (e) => {
+            const val = parseInt(e.target.value);
+            speedText.innerText = val;
+            
+            card.setAttribute('data-updating', 'true');
+            fanSlider.disabled = true;
+
+            // Logic UI: Nếu kéo thanh trượt mà công tắc đang tắt -> Tự động bật quạt
+            if (!fanSwitch.checked) {
+                ignoreFanSwitchEvent = true;
+                fanSwitch.checked = true;
+                ignoreFanSwitchEvent = false;
+                try {
+                    await API.toggleDevice(device.id, 'on');
+                } catch(e) {
+                    console.error("Lỗi tự động bật quạt", e);
+                }
+            }
+
+            try { 
+                // Gửi tốc độ: 0, 1 hoặc 2
+                await API.setDeviceSpeed(device.id, val); 
+            } catch (err) { 
+                alert("Lỗi khi chỉnh tốc độ!"); 
+            } finally {
+                setTimeout(() => {
+                    card.removeAttribute('data-updating');
+                    fanSlider.disabled = card.querySelector('.mode-btn[data-mode="auto"]').classList.contains('active');
+                }, 4500);
+            }
+        });
+
+        container.appendChild(card);
     }
 
-    // Template Cảm biến (Nhiệt độ/Độ ẩm)
-    function renderSensorCard(device) {
+    // =========================================================
+    // CẬP NHẬT GIAO DIỆN KHI DỮ LIỆU TỪ ADAFRUIT THAY ĐỔI
+    // =========================================================
+    async function refreshDeviceStates() {
+        let devices = [];
+        try { devices = await API.getDevices(); } 
+        catch (e) { return; } // Lỗi mạng nhẹ, bỏ qua
+
+        // Tách biệt từng thiết bị, 1 cái lỗi mạng không làm chết cả đám
+        devices.forEach(async (device) => {
+            try {
+                const state = await API.getDeviceState(device.id);
+                const card = document.querySelector(`[data-device-id="${device.id}"]`);
+                
+                // Nếu đang bấm trên UI thì bỏ qua update để tránh nảy nút
+                if (!card || card.getAttribute('data-updating') === 'true') return;
+
+                if (device.type === 'sensor') {
+                    const valEl = card.querySelector('.temp-inner');
+                    if (valEl) valEl.innerHTML = state.sensor_value !== undefined ? `${state.sensor_value}°` : '--';
+                }
+
+                if (device.type === 'controller') {
+                    const toggle = card.querySelector('input[type="checkbox"]');
+                    if (toggle) {
+                        const isOn = checkIsOn(state.status);
+                        if (toggle.checked !== isOn) toggle.checked = isOn;
+                    }
+
+                    // Quạt có thêm Slider
+                    if (card.classList.contains('fan-card')) {
+                        const speedSlider = card.querySelector('.fan-slider');
+                        const speedText = card.querySelector('.speed-text');
+                        
+                        // Cập nhật Slider (nếu đang không bị người dùng cầm kéo)
+                        if (speedSlider && state.speed !== undefined && !speedSlider.matches(':active')) {
+                            let newSpeed = parseInt(state.speed);
+                            if (isNaN(newSpeed)) newSpeed = 0;
+                            if (newSpeed > 3) newSpeed = 3;
+                            if (newSpeed < 0) newSpeed = 0;
+                            
+                            speedSlider.value = newSpeed;
+                            if(speedText) speedText.innerText = newSpeed;
+                        }
+
+                        // FIXED: Chỉ cập nhật Mode nếu server trả về mode rõ ràng, tránh fallback bậy làm nhảy nút
+                        if (state.mode) {
+                            const activeModeButton = card.querySelector(`.mode-btn[data-mode="${state.mode}"]`);
+                            if (activeModeButton && !activeModeButton.classList.contains('active')) {
+                                card.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+                                activeModeButton.classList.add('active');
+                                
+                                // Cập nhật lại trạng thái khóa nút
+                                const isAuto = state.mode === 'auto';
+                                if (speedSlider) speedSlider.disabled = isAuto;
+                                if (toggle) toggle.disabled = isAuto;
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                // Ignore lỗi lẻ của 1 thiết bị, các thiết bị khác vẫn update bình thường
+            }
+        });
+    }
+
+    // =========================================================
+    // RENDER CẢM BIẾN VÀ TÍNH NĂNG CẢNH BÁO VƯỢT NGƯỠNG
+    // =========================================================
+    async function renderSensorCard(device, container) {
+        let val = 0;
+        try {
+            const state = await API.getDeviceState(device.id);
+            val = state.sensor_value !== undefined ? state.sensor_value : 0;
+        } catch (error) {
+            console.warn(`Không lấy được State cho cảm biến ID ${device.id}`);
+        }
+
+        val = parseFloat(val);
+        const isTemp = device.name.toLowerCase().includes('nhiệt');
+        
+        let isAlert = false;
+        let alertMsg = "Cập nhật liên tục";
+        let ringStyle = "";
+        let valStyle = "";
+        let iconHtml = '<i class="fa-solid fa-clock"></i>';
+
+        // -----------------------------------------------------------------
+        // LẤY NGƯỠNG CẢNH BÁO (THRESHOLD) TỪ API VÀ KIỂM TRA
+        // -----------------------------------------------------------------
+        try {
+            // Lấy toàn bộ ngưỡng từ API
+            const thresholds = await API.getThresholds();
+            
+            // Tìm ngưỡng cài đặt cho thiết bị này (Backend có thể lưu dưới dạng target_device_id hoặc device_id)
+            const deviceThreshold = thresholds.find(t => 
+                t.target_device === device.id || 
+                t.device_id === device.id
+            );
+
+            if (deviceThreshold) {
+                const thresholdValue = parseFloat(deviceThreshold.value);
+                const condition = deviceThreshold.condition; // Ví dụ: '>', '<', '>='...
+
+                // Kiểm tra xem giá trị hiện tại có vi phạm điều kiện hay không
+                let isTriggered = false;
+                if (condition === '>' && val > thresholdValue) isTriggered = true;
+                else if (condition === '>=' && val >= thresholdValue) isTriggered = true;
+                else if (condition === '<' && val < thresholdValue) isTriggered = true;
+                else if (condition === '<=' && val <= thresholdValue) isTriggered = true;
+                else if (condition === '==' && val === thresholdValue) isTriggered = true;
+                // Nếu backend không trả về condition, mặc định coi là >=
+                else if (!condition && val >= thresholdValue) isTriggered = true;
+
+                // Cập nhật giao diện nếu bị vượt ngưỡng
+                if (isTriggered) {
+                    isAlert = true;
+                    if (isTemp) {
+                        alertMsg = `Vượt ngưỡng (${condition || '>='} ${thresholdValue})`;
+                        ringStyle = "border-color: var(--danger-color); box-shadow: 0 0 15px rgba(255,77,77,0.3);";
+                        valStyle = "color: var(--danger-color);";
+                        iconHtml = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                    } else {
+                        alertMsg = `Cảnh báo độ ẩm (${condition || '>='} ${thresholdValue})`;
+                        ringStyle = "border-color: #4dacff; box-shadow: 0 0 15px rgba(77,172,255,0.3);";
+                        valStyle = "color: #4dacff;";
+                        iconHtml = '<i class="fa-solid fa-droplet"></i>';
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn(`Lỗi khi lấy Threshold cho cảm biến ID ${device.id}`, error);
+        }
+        // -----------------------------------------------------------------
+
         const card = document.createElement('div');
-        card.className = 'card room-status-card widget-item';
+        card.className = `card room-status-card widget-item ${isAlert ? 'alert-border' : ''}`;
+        
+        if (isAlert && isTemp) card.style.border = "1px solid var(--danger-color)";
+        else if (isAlert && !isTemp) card.style.border = "1px solid #4dacff";
+
+        card.setAttribute('data-room', `room-${device.zone_id}`);
+        card.setAttribute('data-device-id', device.id);
         card.innerHTML = `
             <div class="room-info">
                 <h2>${device.name}</h2>
-                <p class="humidity"><i class="fa-solid fa-clock"></i> Cập nhật: vừa xong</p>
+                <p class="humidity" style="${isAlert && isTemp ? 'color: var(--danger-color);' : (isAlert ? 'color:#4dacff;' : '')}">${iconHtml} ${alertMsg}</p>
             </div>
-            <div class="temp-ring">
-                <div class="temp-inner">${device.last_value || 0}&deg;</div>
+            <div class="temp-ring" style="${ringStyle}">
+                <div class="temp-inner" style="${valStyle}">${val}&deg;</div>
             </div>
         `;
-        deviceContainer.appendChild(card);
+        container.appendChild(card);
     }
 
-    // --- 3. LOGIC LỌC PHÒNG (SETUP SAU KHI LOAD) ---
+    async function renderSensorChart(device) {
+        const chartWrapper = document.createElement('div');
+        chartWrapper.className = 'card widget-item'; 
+        chartWrapper.setAttribute('data-room', `room-${device.zone_id}`);
+        chartWrapper.style = 'padding: 20px; background: var(--card-bg); border-radius: 12px; height: 100%;';
+        
+        const isTemp = device.name.toLowerCase().includes('nhiệt');
+        const icon = isTemp ? '<i class="fa-solid fa-temperature-half" style="color: #ff6b6b;"></i>' : '<i class="fa-solid fa-droplet" style="color: #4dacff;"></i>';
+
+        chartWrapper.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="margin: 0; color: var(--text-primary);">${icon} Biểu đồ ${device.name}</h4>
+                <small style="color: var(--text-muted);">Dữ liệu History</small>
+            </div>
+            <canvas id="chart-${device.id}"></canvas>
+        `;
+        chartsContainer.appendChild(chartWrapper);
+
+        let history = [];
+        try {
+            history = await API.getDeviceHistory(device.id, 15);
+        } catch (error) {
+            console.warn(`Lỗi khi lấy lịch sử cho thiết bị ${device.id}`);
+        }
+        
+        let labels = [], dataValues = [];
+
+        if (!history || history.length === 0) {
+            labels = ['--:--', '--:--', '--:--', '--:--', '--:--'];
+            dataValues = [0, 0, 0, 0, 0];
+        } else {
+            const sortedHistory = history.reverse();
+            labels = sortedHistory.map(h => {
+                const d = new Date(h.timestamp); 
+                return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            });
+            dataValues = sortedHistory.map(h => parseFloat(h.value || 0));
+        }
+
+        const borderColor = isTemp ? '#ff6b6b' : '#4dacff';
+        const bgColor = isTemp ? 'rgba(255, 107, 107, 0.15)' : 'rgba(77, 172, 255, 0.15)';
+
+        const ctx = document.getElementById(`chart-${device.id}`).getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: device.name, 
+                    data: dataValues,
+                    borderColor: borderColor, backgroundColor: bgColor,
+                    borderWidth: 2, pointBackgroundColor: borderColor, pointBorderColor: '#fff',
+                    pointRadius: 3, fill: true, tension: 0.4 
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: 'rgba(128, 128, 128, 0.1)' } },
+                    y: { ticks: { color: '#888' }, grid: { color: 'rgba(128, 128, 128, 0.1)' }, suggestedMin: 0 }
+                }
+            }
+        });
+    }
+
+    function renderEmptySensorCard(name) {
+        const card = document.createElement('div');
+        card.className = 'card room-status-card widget-item';
+        card.setAttribute('data-room', 'all'); 
+        card.innerHTML = `
+            <div class="room-info">
+                <h2>${name}</h2>
+                <p class="humidity" style="color: var(--text-secondary);"><i class="fa-solid fa-link-slash"></i> Chưa kết nối</p>
+            </div>
+            <div class="temp-ring" style="border-color: var(--border-color);">
+                <div class="temp-inner" style="color: var(--text-secondary);">--</div>
+            </div>
+        `;
+        sensorContainer.appendChild(card);
+    }
+
+    function renderEmptyChart(name, iconClass, color) {
+        const id = 'empty-chart-' + Math.random().toString(36).substr(2, 9);
+        const chartWrapper = document.createElement('div');
+        chartWrapper.className = 'card widget-item';
+        chartWrapper.setAttribute('data-room', 'all'); 
+        chartWrapper.style = 'padding: 20px; background: var(--card-bg); border-radius: 12px; height: 100%;';
+        chartWrapper.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="margin: 0; color: var(--text-secondary);"><i class="fa-solid ${iconClass}" style="color: ${color}; opacity: 0.5;"></i> Biểu đồ ${name} (N/A)</h4>
+                <small style="color: var(--text-secondary);">No Data</small>
+            </div>
+            <canvas id="${id}"></canvas>
+        `;
+        chartsContainer.appendChild(chartWrapper);
+
+        const ctx = document.getElementById(id).getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: { labels: ['--:--', '--:--', '--:--', '--:--', '--:--'], datasets: [{ data: [0, 0, 0, 0, 0], borderColor: '#888', borderWidth: 1, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888' }, grid: { display: false } }, y: { ticks: { color: '#888' }, grid: { display: false }, min: 0, max: 100 } } }
+        });
+    }
+
+    // --- LOGIC LỌC (FILTER) THEO PHÒNG ---
     function setupFilters() {
         const filterBtns = document.querySelectorAll('.filter-btn');
         const widgetItems = document.querySelectorAll('.widget-item');
-
         filterBtns.forEach(btn => {
             btn.onclick = () => {
                 filterBtns.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const filter = btn.dataset.filter;
+                
                 widgetItems.forEach(item => {
-                    item.style.display = (filter === 'all' || item.dataset.room === filter) ? 'flex' : 'none';
+                    item.style.display = (filter === 'all' || item.dataset.room === filter) ? '' : 'none';
                 });
             };
         });
     }
 
-    // Khởi tạo
     loadDashboard();
 });
 </script>
