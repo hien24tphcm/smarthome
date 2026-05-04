@@ -1,94 +1,103 @@
-const BASE_URL = "http://127.0.0.1:8000/api/v1";
 
-/**
- * Hàm gửi request dùng chung
- */
-async function sendRequest(endpoint, method = "GET", body = null, isLoginForm = false) {
-    const token = localStorage.getItem("access_token");
-    
-    // Cấu hình Headers
-    const headers = {};
-    if (!isLoginForm) {
-        headers["Content-Type"] = "application/json";
-    } else {
-        // Login dùng Form-data theo chuẩn OAuth2 của FastAPI
-        headers["Content-Type"] = "application/x-www-form-urlencoded";
-    }
+const BASE_URL = "https://iot-smart-home-backend-production.up.railway.app/api/v1";
 
-    if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const config = { method, headers };
-    
-    if (body) {
-        config.body = isLoginForm ? body : JSON.stringify(body);
-    }
-
-    try {
-        const response = await fetch(`${BASE_URL}${endpoint}`, config);
-        
-        // Xử lý khi Token hết hạn hoặc không hợp lệ
-        if (response.status === 401 && !endpoint.includes("/auth/login")) {
-            localStorage.removeItem("access_token");
-            window.location.href = "login.html";
-            return;
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.detail || "Lỗi không xác định từ Server");
-        }
-        return data;
-    } catch (error) {
-        console.error("Lỗi kết nối Backend:", error.message);
-        throw error;
-    }
-}
-
-/**
- * Đối tượng API chứa các hàm gọi Backend
- */
 const API = {
-    // 1. Đăng nhập để lấy Token
-    login: async (email, password) => {
-        const formData = new URLSearchParams();
-        formData.append("username", email); // OAuth2 dùng username field cho email
-        formData.append("password", password);
-        
-        const data = await sendRequest("/auth/login", "POST", formData, true);
-        if (data && data.access_token) {
-            localStorage.setItem("access_token", data.access_token);
+    getHeaders: () => {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+            console.warn("Không tìm thấy token. Vui lòng đăng nhập.");
+            
+            if (!window.location.pathname.includes("login.html")) {
+                window.location.href = "../auth/login.html"; 
+            }
+            return {};
         }
-        return data;
+        return {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+        };
     },
 
-    // 2. Quản lý Thiết bị (Devices)
-    getDevices: () => sendRequest("/devices/"), // Lấy danh sách thiết bị
-    
-    // Bật/Tắt thiết bị: action là 'on' hoặc 'off'
-    toggleDevice: (id, action) => sendRequest(`/devices/${id}/toggle?action=${action}`, "POST"),
-    
-    // Cập nhật chế độ: mode là 'manual' hoặc 'auto'
-    updateDeviceMode: (id, mode) => sendRequest(`/devices/${id}/mode/?mode=${mode}`, "POST"),
-    
-    // Cập nhật tốc độ quạt (0-100)
-    setDeviceSpeed: (id, speed) => sendRequest(`/devices/${id}/speed/?speed=${speed}`, "POST"),
+    request: async (endpoint, options = {}) => {
+        const url = `${BASE_URL}${endpoint}`;
+        console.log("👉 Đang gọi API tới:", url);
+        
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    ...API.getHeaders(),
+                    ...(options.headers || {})
+                }
+            });
 
-    // 3. Quản lý Lịch sử (Logs)
-    getLogs: (limit = 50) => sendRequest(`/logs/logs?limit=${limit}`), // Khớp với router /logs trong logs.py
+            if (response.status === 401 || response.status === 403) {
+                console.error("Phiên đăng nhập hết hạn.");
+                API.logout();
+                throw new Error("Unauthorized");
+            }
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.detail || "Lỗi kết nối đến server");
+            }
+            return data;
+            
+        } catch (error) {
+            console.error(`[API Error] ${endpoint}:`, error.message);
+            throw error;
+        }
+    },
 
-    // 4. Quản lý Cài đặt (Settings/Thresholds)
-    // Tạo ngưỡng cảnh báo mới
-    createThreshold: (name, value, type) => sendRequest("/settings/thresholds", "POST", {
-        name: name,
-        value: value,
-        type: type // 'temperature' hoặc 'humidity'
-    }),
-    
-    // Lấy danh sách ngưỡng
-    getThresholds: () => sendRequest("/settings/thresholds"),
+    getDevices: async () => {
+        try {
+            return await API.request("/devices/"); 
+        } catch (error) {
+            console.warn("Chưa có thiết bị, trả về mảng rỗng.");
+            return []; 
+        }
+    },
+    toggleDevice: async (id, action) => await API.request(`/devices/${id}/toggle?action=${action}`, { method: "POST" }),
+    setDeviceMode: async (id, mode) => await API.request(`/devices/${id}/mode?mode=${mode}`, { method: "POST" }),
+    updateDeviceMode: async (id, mode) => await API.setDeviceMode(id, mode),
+    setDeviceSpeed: async (id, speed) => await API.request(`/devices/${id}/speed?speed=${speed}`, { method: "POST" }),
+    getDeviceState: async (id) => await API.request(`/devices/${id}/state`),
+    getDeviceHistory: async (id, limit = 50) => {
+        try { 
+            const data = await API.request(`/devices/${id}/history?limit=${limit}`);
+            console.log("🔥 HISTORY:", data); // thêm dòng này
+            return data;
+        } catch (e) { 
+            console.error("❌ HISTORY ERROR:", e);
+            return []; 
+        }
+    },
 
-    // 5. Quản lý Khu vực (Zones)
-    getZones: () => sendRequest("/zones/")
+    getZones: async () => {
+        try { return await API.request("/zones/"); } 
+        catch (e) { return []; }
+    },
+
+    getLogs: async (limit = 50) => {
+        try { return await API.request(`/logs/?limit=${limit}`); } 
+        catch (e) { return []; }
+    },
+    // --- MODULE: SETTINGS ---
+    getSchedules: async () => {
+        try { return await API.request("/settings/schedules"); } 
+        catch (e) { return []; }
+    },
+    getThreshold: async (id) => {
+        try { 
+            return await API.request(`/settings/thresholds/${id}`); 
+        } catch (e) { 
+            return null; 
+        }
+    },
+    // --- AUTH ---
+    logout: () => {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("role");
+        window.location.href = "../auth/login.html";
+    }
 };
