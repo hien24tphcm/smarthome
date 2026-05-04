@@ -1,4 +1,9 @@
 
+// ==========================================
+// TẬP TIN API.JS - KẾT NỐI BACKEND RAILWAY
+// ==========================================
+
+// THAY ĐỔI TẠI ĐÂY: Đường dẫn backend mới của bạn
 const BASE_URL = "https://iot-smart-home-backend-production.up.railway.app/api/v1";
 
 const API = {
@@ -7,6 +12,7 @@ const API = {
         if (!token) {
             console.warn("Không tìm thấy token. Vui lòng đăng nhập.");
             
+            // Chỉ chuyển hướng nếu không phải đang ở trang login để tránh lặp vô tận
             if (!window.location.pathname.includes("login.html")) {
                 window.location.href = "../auth/login.html"; 
             }
@@ -34,27 +40,40 @@ const API = {
             if (response.status === 401 || response.status === 403) {
                 console.error("Phiên đăng nhập hết hạn.");
                 API.logout();
-                throw new Error("Unauthorized");
+                const error = new Error("Unauthorized");
+                error.status = response.status;
+                throw error;
             }
-            const data = await response.json();
-            
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (parseError) {
+                data = null;
+            }
+
             if (!response.ok) {
-                throw new Error(data.detail || "Lỗi kết nối đến server");
+                const message = data?.detail || data?.message || response.statusText || "Lỗi kết nối đến server";
+                const error = new Error(message);
+                error.status = response.status;
+                throw error;
             }
+
             return data;
-            
         } catch (error) {
-            console.error(`[API Error] ${endpoint}:`, error.message);
+            console.error(`[API Error] ${endpoint}:`, error.message || error);
             throw error;
         }
     },
+
+   
 
     getDevices: async () => {
         try {
             return await API.request("/devices/"); 
         } catch (error) {
             console.warn("Chưa có thiết bị, trả về mảng rỗng.");
-            return []; 
+            return []; // Tự động trả mảng rỗng nếu 404
         }
     },
     toggleDevice: async (id, action) => await API.request(`/devices/${id}/toggle?action=${action}`, { method: "POST" }),
@@ -84,14 +103,30 @@ const API = {
     },
     // --- MODULE: SETTINGS ---
     getSchedules: async () => {
-        try { return await API.request("/settings/schedules"); } 
-        catch (e) { return []; }
+        const schedulesPaths = ["/settings/schedules", "/settings/schedules/"];
+        for (const path of schedulesPaths) {
+            try {
+                const res = await API.request(path);
+                return Array.isArray(res) ? res : (res ? [res] : []);
+            } catch (e) {
+                if (e.status === 404) continue;
+                console.warn("Lỗi khi lấy schedules:", e.message);
+                return [];
+            }
+        }
+        return [];
     },
-    getThreshold: async (id) => {
-        try { 
-            return await API.request(`/settings/thresholds/${id}`); 
-        } catch (e) { 
-            return null; 
+    
+    // Gọi API lấy tất cả thresholds và lọc theo thiết bị nếu cần.
+    getThresholds: async (deviceId) => {
+        if (!deviceId) return [];
+        try {
+            const res = await API.request(`/settings/thresholds`);
+            const thresholds = res ? (Array.isArray(res) ? res : [res]) : [];
+            return thresholds;
+        } catch (e) {
+            console.warn(`Thiết bị ${deviceId} chưa có cấu hình ngưỡng.`);
+            return [];
         }
     },
     // --- AUTH ---
