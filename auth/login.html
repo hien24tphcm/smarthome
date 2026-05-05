@@ -5,27 +5,187 @@
     <title>Đăng nhập - SmartHome System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="auth.css">
+    
+    <style>
+        #login-options { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        .btn-option { width: 100%; padding: 12px; background-color: #f8f9fa; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-option:hover { background-color: #e9ecef; border-color: #ccc; }
+        .btn-admin-option { background-color: #e3f2fd; border-color: #b6d4fe; color: #0d6efd; }
+        .btn-admin-option:hover { background-color: #cfe2ff; }
+        
+        .btn-back { background: none; border: none; color: #666; cursor: pointer; font-size: 14px; margin-bottom: 15px; display: flex; align-items: center; gap: 5px; transition: color 0.2s; }
+        .btn-back:hover { color: #000; }
+
+        /* Mặc định ẩn các form phụ */
+        #login-form, #signup-form, #user-info-display { display: none; animation: fadeIn 0.3s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Styling cho grid tạo tài khoản */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; margin-bottom: 15px; }
+        .form-grid.full-width { grid-template-columns: 1fr; }
+        .form-group label { font-size: 13px; font-weight: 600; color: #555; display: block; margin-bottom: 5px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; box-sizing: border-box;}
+        
+        /* Box hiển thị thông tin user */
+        .user-info-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 8px; text-align: left; font-size: 14px; color: #166534; }
+        .user-info-box strong { color: #14532d; }
+    </style>
 </head>
 <body class="login-page">
-    <div class="login-card">
-        <div class="login-header">
+    <div class="login-card" style="max-width: 450px;">
+        <div class="login-header" id="header-text">
             <i class="fas fa-house-user"></i>
             <h2>SMART<span>HOME</span></h2>
-            <p>Vui lòng đăng nhập để tiếp tục</p>
+            <p id="prompt-text">Vui lòng chọn phương thức đăng nhập</p>
         </div>
+
+        <div id="login-options">
+            <button type="button" class="btn-option" id="btn-show-user">
+                <i class="fas fa-user-graduate"></i> Đăng nhập User
+            </button>
+            <button type="button" class="btn-option btn-admin-option" id="btn-show-admin">
+                <i class="fas fa-user-shield"></i> Đăng nhập Admin
+            </button>
+            <hr style="margin: 10px 0; border: none; border-top: 1px solid #ddd;">
+            <button type="button" class="btn-option" id="btn-show-signup" style="background-color: #f0f9ff; border-color: #b3e5fc; color: #01579b;">
+                <i class="fas fa-user-plus"></i> Tạo tài khoản mới
+            </button>
+        </div>
+
         <form id="login-form">
+            <button type="button" class="btn-back btn-go-home">
+                <i class="fas fa-arrow-left"></i> Quay lại
+            </button>
             <div class="input-group">
                 <i class="fas fa-user"></i>
-                <input type="text" id="username" placeholder="Tên đăng nhập" required>
+                <input type="text" id="username" placeholder="Tên đăng nhập (Email)" required>
             </div>
             <div class="input-group">
                 <i class="fas fa-lock"></i>
                 <input type="password" id="password" placeholder="Mật khẩu" required>
             </div>
             <button type="submit" class="btn-login">ĐĂNG NHẬP</button>
-            <p id="error-msg" class="error-text">Tài khoản hoặc mật khẩu không đúng!</p>
+            <p id="error-msg" class="error-text" style="display: none; color: #d93025; font-size: 13px; text-align: center; margin-top: 10px;"></p>
         </form>
+
+        <form id="signup-form">
+            <button type="button" class="btn-back btn-go-home">
+                <i class="fas fa-arrow-left"></i> Quay lại
+            </button>
+            <h3 style="margin-bottom: 15px; color: #333; font-size: 18px;"><i class="fas fa-user-plus"></i> Thêm thành viên mới</h3>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Họ</label>
+                    <input type="text" id="member-lname" placeholder="VD: Nguyễn" required />
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Tên</label>
+                    <input type="text" id="member-fname" placeholder="VD: Văn A" required />
+                </div>
+            </div>
+
+            <div class="form-grid full-width">
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" id="member-email" placeholder="VD: member@gmail.com" required />
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Mật khẩu</label>
+                    <input type="password" id="member-password" placeholder="Mật khẩu ban đầu" required />
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-shield-halved"></i> Vai trò</label>
+                    <select id="member-role">
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-grid full-width">
+                <div class="form-group" id="member-home-id-group">
+                    <label><i class="fas fa-hashtag"></i> Home ID (Dành cho Member)</label>
+                    <input type="number" id="member-home-id" placeholder="VD: 1" min="1" required />
+                </div>
+                <div class="form-group" id="member-home-name-group" style="display: none;">
+                    <label><i class="fas fa-house-user"></i> Home Name (Dành cho Admin)</label>
+                    <input type="text" id="member-home-name" placeholder="VD: Nhà của tôi" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login" style="background: #01579b;">ĐĂNG KÝ NGAY</button>
+            <p id="signup-error-msg" style="display: none; color: #d93025; font-size: 13px; text-align: center; margin-top: 10px;"></p>
+        </form>
+
+        <div id="user-info-display">
+            <h3 style="color: #166534; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Đăng ký thành công!</h3>
+            <div class="user-info-box" id="user-details-content">
+                </div>
+            <button type="button" class="btn-login btn-go-home" style="margin-top: 15px; background: #16a34a;">VỀ TRANG ĐĂNG NHẬP</button>
+        </div>
     </div>
-        <script src="login.js?v=999"></script>
+
+    <script>
+        const optionsArea = document.getElementById('login-options');
+        const formArea = document.getElementById('login-form');
+        const signupArea = document.getElementById('signup-form');
+        const infoArea = document.getElementById('user-info-display');
+        const promptLabel = document.getElementById('prompt-text');
+
+        // Các nút
+        const btnAdmin = document.getElementById('btn-show-admin');
+        const btnUser = document.getElementById('btn-show-user');
+        const btnSignup = document.getElementById('btn-show-signup');
+        const btnsGoHome = document.querySelectorAll('.btn-go-home');
+
+        window.selectedLoginType = ""; 
+
+        // Hiển thị form login
+        btnAdmin.addEventListener('click', () => { showScreen(formArea, "Đăng nhập Admin Hệ thống"); window.selectedLoginType = "admin"; });
+        btnUser.addEventListener('click', () => { showScreen(formArea, "Đăng nhập User"); window.selectedLoginType = "member"; });
+        
+        // Hiển thị form đăng ký
+        btnSignup.addEventListener('click', () => { showScreen(signupArea, "Tạo tài khoản mới"); });
+
+        // Nút quay lại màn hình chính
+        btnsGoHome.forEach(btn => {
+            btn.addEventListener('click', () => { showScreen(optionsArea, "Vui lòng chọn phương thức đăng nhập"); });
+        });
+
+        function showScreen(screenEl, promptText) {
+            optionsArea.style.display = 'none'; formArea.style.display = 'none';
+            signupArea.style.display = 'none'; infoArea.style.display = 'none';
+            screenEl.style.display = (screenEl === optionsArea) ? 'flex' : 'block';
+            promptLabel.innerText = promptText;
+        }
+
+        // Logic đổi Role trong Sign Up
+        const roleSelect = document.getElementById('member-role');
+        const homeIdGroup = document.getElementById('member-home-id-group');
+        const homeNameGroup = document.getElementById('member-home-name-group');
+        const homeIdInput = document.getElementById('member-home-id');
+        const homeNameInput = document.getElementById('member-home-name');
+
+        roleSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'admin') {
+                homeIdGroup.style.display = 'none';
+                homeNameGroup.style.display = 'block';
+                homeIdInput.removeAttribute('required'); // Admin không cần Home ID
+                homeNameInput.setAttribute('required', 'true');
+            } else {
+                homeIdGroup.style.display = 'block';
+                homeNameGroup.style.display = 'none';
+                homeNameInput.removeAttribute('required'); // Member không cần Home Name
+                homeIdInput.setAttribute('required', 'true');
+            }
+        });
+    </script>
+
+    <script src="login.js?v=2002"></script>
 </body>
 </html>

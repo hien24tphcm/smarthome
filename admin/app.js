@@ -1,14 +1,14 @@
 // ============================================================
 // SmartHome Admin
 // ============================================================
-const API = "http://localhost:8000/api/v1";
+const API = "https://iot-smart-home-backend-production.up.railway.app/api/v1";
 const POLL_INTERVAL_MS = 7000; // tự cập nhật sensor mỗi 7s
 
 // ============================================================
 // AUTH & PERMISSIONS
 // ============================================================
 function getToken() {
-    return localStorage.getItem("token");
+    return localStorage.getItem("access_token");
 }
 
 function getRole() {
@@ -22,7 +22,7 @@ function checkAuth() {
     const token = getToken();
     const role  = getRole();
     if (!token || role !== "admin") {
-        localStorage.removeItem("token");
+        localStorage.removeItem("access_token");
         localStorage.removeItem("role");
         window.location.href = "/auth/login.html";
         return false;
@@ -110,6 +110,37 @@ function detectControllerIcon(device) {
     return "fa-plug";
 }
 
+/** Kiểm tra thiết bị có phải quạt không */
+function isFanDevice(device) {
+    const key = (device.name + " " + device.feed_id).toLowerCase();
+    return /(fan|quạt|quat)/.test(key);
+}
+
+/** Xác định mức tốc độ từ giá trị speed (0-100) */
+function getSpeedLevel(speed) {
+    const val = Number(speed) || 0;
+    if (val <= 0)  return 0;  // tắt
+    if (val <= 40) return 1;  // nhỏ
+    if (val <= 70) return 2;  // vừa
+    return 3;                 // lớn
+}
+
+// ============================================================
+// FAN MODE CONTROL
+// ============================================================
+
+// Lưu tạm mode theo device_id vì API /devices/ hiện chưa chắc trả mode
+let fanModeMap = JSON.parse(localStorage.getItem("fanModeMap") || "{}");
+
+function getFanMode(device) {
+    return (device.mode || fanModeMap[device.id] || "manual").toLowerCase();
+}
+
+function saveFanMode(deviceId, mode) {
+    fanModeMap[deviceId] = mode;
+    localStorage.setItem("fanModeMap", JSON.stringify(fanModeMap));
+}
+
 function escapeHtml(str) {
     return String(str ?? "")
         .replace(/&/g, "&amp;")
@@ -135,7 +166,8 @@ async function loadDevices() {
 
         if (res.status === 401 || res.status === 403) {
             showToast("Phiên đăng nhập đã hết hạn", "error");
-            localStorage.removeItem("token");
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("role");
             window.location.href = "/auth/login.html";
             return;
         }
@@ -153,8 +185,20 @@ async function loadDevices() {
         }
 
         const devices = await res.json();
-        const sensors     = devices.filter(d => (d.type || "").toLowerCase() === "sensor");
-        const controllers = devices.filter(d => (d.type || "").toLowerCase() === "controller");
+        allDevicesCache = devices;
+
+        // Lọc theo tầng nếu đang filter
+        let filtered = devices;
+        if (currentFloorFilter !== "all") {
+            const floorNum = Number(currentFloorFilter);
+            const zoneIdsOnFloor = allZonesCache
+                .filter(z => z.floor === floorNum)
+                .map(z => z.id);
+            filtered = devices.filter(d => zoneIdsOnFloor.includes(d.zone_id));
+        }
+
+        const sensors     = filtered.filter(d => (d.type || "").toLowerCase() === "sensor");
+        const controllers = filtered.filter(d => (d.type || "").toLowerCase() === "controller");
 
         renderSensors(sensors);
         renderControllers(controllers);
@@ -312,6 +356,7 @@ function renderSensors(sensors) {
                     <div class="card-title-area">
                         <div class="card-title">${escapeHtml(d.name)}</div>
                         <div class="card-feed">${escapeHtml(d.feed_id)}</div>
+                        ${getZoneLabel(d.zone_id) ? `<div class="card-zone"><i class="fas fa-map-pin"></i> ${escapeHtml(getZoneLabel(d.zone_id))}</div>` : ""}
                     </div>
                     <button class="btn-trash" title="Xoá thiết bị" onclick="deleteDevice(${d.id}, '${escapeHtml(d.name)}')">
                         <i class="fas fa-trash"></i>
@@ -349,13 +394,62 @@ function renderControllers(controllers) {
     grid.innerHTML = controllers.map(d => {
         const icon = detectControllerIcon(d);
         const isOn = String(d.status).toUpperCase() === "ON";
+        const fan  = isFanDevice(d);
+        const speedLv = fan ? getSpeedLevel(d.speed) : 0;
+        const fanMode = fan ? getFanMode(d) : "manual";
+        const isAutoMode = fanMode === "auto";
+
+        // Thanh điều chỉnh tốc độ quạt (chỉ hiện cho quạt)
+        const modeHtml = fan ? `
+            <div class="fan-mode-control" data-device-id="${d.id}">
+                <div class="speed-label"><i class="fas fa-robot"></i> Chế độ</div>
+                <div class="speed-buttons">
+                    <button class="speed-btn ${fanMode === 'manual' ? 'active med' : ''}"
+                            onclick="setFanMode(${d.id}, 'manual', this)">
+                        <i class="fas fa-hand-pointer"></i> Thủ công
+                    </button>
+                    <button class="speed-btn ${fanMode === 'auto' ? 'active high' : ''}"
+                            onclick="setFanMode(${d.id}, 'auto', this)">
+                        <i class="fas fa-robot"></i> Auto
+                    </button>
+                </div>
+            </div>
+        ` : "";
+    
+        const speedHtml = fan ? `
+            <div class="fan-speed-control ${isAutoMode ? 'disabled-control' : ''}" data-device-id="${d.id}">
+                <div class="speed-label">
+                    <i class="fas fa-gauge-high"></i> Tốc độ
+                    ${isAutoMode ? '<span style="font-size:12px;opacity:.75;"> · đang tự động</span>' : ''}
+                </div>
+                <div class="speed-buttons">
+                    <button class="speed-btn ${speedLv === 1 ? 'active low' : ''}"
+                            ${isAutoMode ? 'disabled' : ''}
+                            onclick="setFanSpeed(${d.id}, 33, this)" title="Nhỏ">
+                        <i class="fas fa-wind"></i> Nhỏ
+                    </button>
+                    <button class="speed-btn ${speedLv === 2 ? 'active med' : ''}"
+                            ${isAutoMode ? 'disabled' : ''}
+                            onclick="setFanSpeed(${d.id}, 66, this)" title="Vừa">
+                        <i class="fas fa-wind"></i> Vừa
+                    </button>
+                    <button class="speed-btn ${speedLv === 3 ? 'active high' : ''}"
+                            ${isAutoMode ? 'disabled' : ''}
+                            onclick="setFanSpeed(${d.id}, 100, this)" title="Lớn">
+                        <i class="fas fa-wind"></i> Lớn
+                    </button>
+                </div>
+            </div>
+        ` : "";
+
         return `
-            <div class="device-card controller-card" data-id="${d.id}">
+            <div class="device-card controller-card ${fan ? 'fan-card' : ''}" data-id="${d.id}">
                 <div class="card-header">
-                    <div class="card-icon"><i class="fas ${icon}"></i></div>
+                    <div class="card-icon ${fan && isOn ? 'fan-spinning' : ''}"><i class="fas ${icon}"></i></div>
                     <div class="card-title-area">
                         <div class="card-title">${escapeHtml(d.name)}</div>
                         <div class="card-feed">${escapeHtml(d.feed_id)}</div>
+                        ${getZoneLabel(d.zone_id) ? `<div class="card-zone"><i class="fas fa-map-pin"></i> ${escapeHtml(getZoneLabel(d.zone_id))}</div>` : ""}
                     </div>
                     <button class="btn-trash" title="Xoá thiết bị" onclick="deleteDevice(${d.id}, '${escapeHtml(d.name)}')">
                         <i class="fas fa-trash"></i>
@@ -372,6 +466,8 @@ function renderControllers(controllers) {
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                ${speedHtml}
+                ${modeHtml}
             </div>
         `;
     }).join("");
@@ -418,15 +514,117 @@ async function toggleDevice(deviceId, checkboxEl) {
 }
 
 // ============================================================
+// FAN SPEED CONTROL
+// ============================================================
+async function setFanSpeed(deviceId, speed, btnEl) {
+    if (fanModeMap[deviceId] === "auto") {
+        showToast("Quạt đang ở chế độ Auto, hãy chuyển sang Thủ công để chỉnh tốc độ", "info");
+        return;
+    }
+
+    const speedControl = btnEl.closest(".fan-speed-control");
+    const allBtns = speedControl.querySelectorAll(".speed-btn");
+
+    // Disable tất cả nút trong lúc gọi API
+    allBtns.forEach(b => b.disabled = true);
+
+    try {
+        const res = await fetch(`${API}/devices/${deviceId}/speed?speed=${speed}`, {
+            method: "POST",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error("setFanSpeed error:", errText);
+            showToast("Không thể đổi tốc độ quạt", "error");
+            return;
+        }
+
+        // Cập nhật UI: bỏ active cũ, thêm active mới
+        allBtns.forEach(b => b.classList.remove("active", "low", "med", "high"));
+        const levelClass = speed <= 40 ? "low" : speed <= 70 ? "med" : "high";
+        btnEl.classList.add("active", levelClass);
+
+        const labels = { 33: "Nhỏ", 66: "Vừa", 100: "Lớn" };
+        showToast(`Đã chỉnh quạt mức ${labels[speed] || speed}`, "success");
+
+        // Nếu quạt đang tắt → tự bật lên
+        const card = btnEl.closest(".device-card");
+        const checkbox = card.querySelector(".toggle-switch input");
+        if (checkbox && !checkbox.checked) {
+            checkbox.checked = true;
+            const stateLabel = card.querySelector(".state-label");
+            stateLabel.classList.remove("state-off");
+            stateLabel.classList.add("state-on");
+            stateLabel.querySelector("span").innerText = "BẬT";
+            // Bật icon quay
+            const iconEl = card.querySelector(".card-icon");
+            if (iconEl) iconEl.classList.add("fan-spinning");
+        }
+
+    } catch (err) {
+        console.error("setFanSpeed error:", err);
+        showToast("Lỗi kết nối khi chỉnh tốc độ", "error");
+    } finally {
+        allBtns.forEach(b => b.disabled = false);
+    }
+}
+
+async function setFanMode(deviceId, mode, btnEl) {
+    const modeControl = btnEl.closest(".fan-mode-control");
+    const allModeBtns = modeControl.querySelectorAll(".speed-btn");
+
+    allModeBtns.forEach(b => b.disabled = true);
+
+    try {
+        const res = await fetch(`${API}/devices/${deviceId}/mode?mode=${mode}`, {
+            method: "POST",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error("setFanMode error:", errText);
+            showToast("Không thể đổi chế độ quạt", "error");
+            return;
+        }
+
+        saveFanMode(deviceId, mode);
+
+        allModeBtns.forEach(b => b.classList.remove("active", "low", "med", "high"));
+        btnEl.classList.add("active", mode === "auto" ? "high" : "med");
+
+        showToast(
+            mode === "auto"
+                ? "Đã chuyển quạt sang chế độ Auto"
+                : "Đã chuyển quạt sang chế độ Thủ công",
+            "success"
+        );
+
+        await loadDevices();
+
+    } catch (err) {
+        console.error("setFanMode error:", err);
+        showToast("Lỗi kết nối khi đổi chế độ quạt", "error");
+    } finally {
+        allModeBtns.forEach(b => b.disabled = false);
+    }
+}
+
+// ============================================================
 // MODAL THÊM THIẾT BỊ
 // ============================================================
 function openAddDeviceModal() {
     document.getElementById("add-device-modal").classList.add("active");
-    document.getElementById("device-name").value  = "";
-    document.getElementById("device-feed").value  = "";
+    document.getElementById("device-preset").value = "";
     document.getElementById("modal-error").innerText = "";
     loadZonesForModal();
-    setTimeout(() => document.getElementById("device-name").focus(), 100);
+}
+
+function onDevicePresetChange() {
+    // Chỉ cần reset lỗi khi chọn lại
+    document.getElementById("modal-error").innerText = "";
 }
 function closeAddDeviceModal() {
     document.getElementById("add-device-modal").classList.remove("active");
@@ -449,18 +647,29 @@ async function loadZonesForModal() {
     try {
         const res = await fetch(`${API}/zones/`, { headers: authHeaders() });
         if (!res.ok) {
-            // Nếu chưa có zone, vẫn cho phép gõ tay (fallback)
             select.innerHTML = `<option value="1">Zone mặc định (id=1)</option>`;
             return;
         }
         const zones = await res.json();
+        allZonesCache = zones;
+
         if (!zones.length) {
-            select.innerHTML = `<option value="1">Zone mặc định (id=1)</option>`;
+            select.innerHTML = `<option value="">-- Chưa có khu vực, hãy tạo trong mục Quản lý Khu vực --</option>`;
             return;
         }
-        select.innerHTML = zones.map(z =>
-            `<option value="${z.id}">Tầng ${z.floor} – ${escapeHtml(z.room)}</option>`
-        ).join("");
+
+        // Nhóm theo tầng → optgroup
+        const floors = [...new Set(zones.map(z => z.floor))].sort((a, b) => a - b);
+        let html = '<option value="">-- Chọn khu vực --</option>';
+        floors.forEach(floor => {
+            const rooms = zones.filter(z => z.floor === floor);
+            html += `<optgroup label="Tầng ${floor}">`;
+            rooms.forEach(z => {
+                html += `<option value="${z.id}">${escapeHtml(z.room)}</option>`;
+            });
+            html += `</optgroup>`;
+        });
+        select.innerHTML = html;
     } catch (err) {
         console.error("loadZones error:", err);
         select.innerHTML = `<option value="1">Zone mặc định (id=1)</option>`;
@@ -471,18 +680,19 @@ async function loadZonesForModal() {
 // ADD DEVICE (CREATE)
 // ============================================================
 async function addDevice() {
-    const errBox  = document.getElementById("modal-error");
-    const name    = document.getElementById("device-name").value.trim();
-    const feed_id = document.getElementById("device-feed").value.trim();
-    const type    = document.getElementById("device-type").value;
-    const zoneVal = document.getElementById("device-zone").value;
+    const errBox    = document.getElementById("modal-error");
+    const presetVal = document.getElementById("device-preset").value;
+    const zoneVal   = document.getElementById("device-zone").value;
 
     errBox.innerText = "";
 
-    if (!name || !feed_id) {
-        errBox.innerText = "Vui lòng nhập đầy đủ Tên thiết bị và Feed Key.";
+    if (!presetVal) {
+        errBox.innerText = "Vui lòng chọn thiết bị.";
         return;
     }
+
+    const [feed_id, name, type] = presetVal.split("|");
+
     const zone_id = parseInt(zoneVal, 10);
     if (!zone_id) {
         errBox.innerText = "Vui lòng chọn Khu vực (Zone).";
@@ -545,10 +755,19 @@ async function deleteDevice(deviceId, deviceName = "") {
 
 let allDevicesCache = [];
 let allThresholdsCache = [];
+let allZonesCache = [];
+let currentFloorFilter = "all";
+
+/** Tìm zone name từ zone_id */
+function getZoneLabel(zoneId) {
+    const z = allZonesCache.find(zone => zone.id === zoneId);
+    return z ? `Tầng ${z.floor} – ${z.room}` : "";
+}
 
 /**
  * Load sensor + controller vào select box
  */
+
 async function loadThresholdDevices() {
     try {
         const res = await fetch(`${API}/devices/`, {
@@ -603,12 +822,10 @@ async function loadThresholdDevices() {
     }
 }
 
-
 /*
  * Lưu threshold mới
  */
 // thêm vào bên trong saveThreshold()
-
 async function saveThreshold() {
     const sensorId = document.getElementById("threshold-sensor").value;
     const value = document.getElementById("threshold-value").value;
@@ -680,13 +897,18 @@ async function saveThreshold() {
 
         document.getElementById("threshold-value").value = "";
 
-        await loadThresholds();
+        try {
+            await loadThresholds();
+        } catch (e) {
+            console.warn("Tạo ngưỡng OK nhưng không tải được danh sách ngưỡng:", e);
+}
 
     } catch (err) {
         console.error("saveThreshold error:", err);
         showToast("Lỗi kết nối server", "error");
     }
 }
+
 
 /**
  * Load danh sách thresholds
@@ -769,6 +991,7 @@ async function loadThresholds() {
 }
 
 
+
 /**
  * Xóa threshold
  */
@@ -800,6 +1023,47 @@ async function deleteThreshold(settingId) {
     }
 }
 
+async function loadThresholdsCache() {
+    try {
+        const res = await fetch(`${API}/settings/thresholds`, {
+            method: "GET",
+            headers: authHeaders()
+        });
+
+        if (res.ok) {
+            allThresholdsCache = await res.json();
+        } else {
+            console.warn("loadThresholdsCache failed:", res.status);
+            allThresholdsCache = [];
+        }
+    } catch (err) {
+        console.error("loadThresholdsCache error:", err);
+        allThresholdsCache = [];
+    }
+}
+
+/**
+ * Kiểm tra sensor có đang vượt ngưỡng nào không
+ * So sánh value với danh sách thresholds đã cache
+ */
+function checkSensorAlert(sensor) {
+    if (sensor.value === null || sensor.value === undefined) return false;
+
+    const val = Number(sensor.value);
+
+    for (const t of allThresholdsCache) {
+        const sameSensor =
+            t.name === sensor.name ||
+            String(t.sensor_id) === String(sensor.id);
+
+        if (!sameSensor) continue;
+
+        if (t.condition && val >= Number(t.value)) return true;
+        if (!t.condition && val <= Number(t.value)) return true;
+    }
+
+    return false;
+}
 
 // ============================================================
 // INIT THRESHOLDS
@@ -1011,9 +1275,183 @@ async function loadReportChart() {
     }
 }
 
+async function loadReportSummary() {
+    const days = document.getElementById("report-days")?.value || 7;
+    const kpiGrid = document.getElementById("report-kpi-grid");
+    const deviceTable = document.getElementById("report-device-table");
+    const automationTable = document.getElementById("report-automation-table");
+
+    if (!kpiGrid) return;
+
+    kpiGrid.innerHTML = `
+        <div class="empty-state">
+            <i class="fas fa-spinner fa-spin"></i> Đang tải báo cáo...
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`${API}/report/summary?days=${days}`, {
+            method: "GET",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error("loadReportSummary error:", errText);
+            showToast("Không tải được báo cáo tổng quan", "error");
+            return;
+        }
+
+        const data = await res.json();
+
+        renderReportKPIs(data);
+        renderReportDevices(data.devices || []);
+        renderReportAutomations(data.automations || []);
+
+    } catch (err) {
+        console.error("loadReportSummary error:", err);
+        showToast("Lỗi kết nối khi tải báo cáo", "error");
+    }
+}
+
+function renderReportKPIs(data) {
+    const grid = document.getElementById("report-kpi-grid");
+    if (!grid) return;
+
+    const items = [
+        { label: "Tổng tầng", value: data.total_floors, icon: "fa-layer-group" },
+        { label: "Tổng phòng", value: data.total_zones, icon: "fa-door-open" },
+        { label: "Tổng thiết bị", value: data.total_devices, icon: "fa-microchip" },
+        { label: "Cảm biến", value: data.total_sensors, icon: "fa-satellite-dish" },
+        { label: "Controller", value: data.total_controllers, icon: "fa-toggle-on" },
+        { label: "Đang bật", value: data.devices_on, icon: "fa-power-off" },
+        { label: "Đang tắt", value: data.devices_off, icon: "fa-circle" },
+        { label: "Lịch hẹn", value: data.total_schedules, icon: "fa-calendar-alt" },
+        { label: "Ngưỡng", value: data.total_thresholds, icon: "fa-exclamation-triangle" },
+        { label: "Nhật ký", value: data.total_logs_in_period, icon: "fa-history" }
+    ];
+
+    grid.innerHTML = items.map(item => `
+        <div class="report-kpi-card">
+            <div class="report-kpi-icon">
+                <i class="fas ${item.icon}"></i>
+            </div>
+            <div>
+                <div class="report-kpi-value">${item.value ?? 0}</div>
+                <div class="report-kpi-label">${item.label}</div>
+            </div>
+        </div>
+    `).join("");
+}
+
+function renderReportDevices(devices) {
+    const tbody = document.getElementById("report-device-table");
+    if (!tbody) return;
+
+    if (!devices.length) {
+        tbody.innerHTML = `<tr><td colspan="5">Chưa có thiết bị nào</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = devices.map(d => `
+        <tr>
+            <td>${escapeHtml(d.name)}</td>
+            <td>${escapeHtml(d.type)}</td>
+            <td>
+                <span class="${String(d.status).toUpperCase() === 'ON' ? 'status-success' : 'status-error'}">
+                    ${String(d.status).toUpperCase()}
+                </span>
+            </td>
+            <td>Tầng ${d.floor} - ${escapeHtml(d.room)}</td>
+            <td>${d.current_value ?? "--"}</td>
+        </tr>
+    `).join("");
+}
+
+function renderReportAutomations(automations) {
+    const tbody = document.getElementById("report-automation-table");
+    if (!tbody) return;
+
+    if (!automations.length) {
+        tbody.innerHTML = `<tr><td colspan="5">Chưa có tự động hóa nào</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = automations.map(a => `
+        <tr>
+            <td>${escapeHtml(a.name)}</td>
+            <td>${escapeHtml(a.type)}</td>
+            <td>${escapeHtml(a.action)}</td>
+            <td>${a.trigger_count ?? 0}</td>
+            <td>${escapeHtml(a.applied_devices || "--")}</td>
+        </tr>
+    `).join("");
+}
+
+function downloadFileFromReport(url, filename) {
+    fetch(url, {
+        method: "GET",
+        headers: authHeaders()
+    })
+        .then(res => {
+            if (!res.ok) throw new Error("Download failed");
+            return res.blob();
+        })
+        .then(blob => {
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+        })
+        .catch(err => {
+            console.error(err);
+            showToast("Không thể tải file báo cáo", "error");
+        });
+}
+
+function getReportDays() {
+    return document.getElementById("report-days")?.value || 7;
+}
+
+function downloadReportPDF() {
+    const days = getReportDays();
+    downloadFileFromReport(
+        `${API}/report/pdf?days=${days}`,
+        `SmartHome_Report_${days}_days.pdf`
+    );
+}
+
+function downloadSensorCSV() {
+    const days = getReportDays();
+    downloadFileFromReport(
+        `${API}/report/csv/sensors?days=${days}`,
+        `SmartHome_Sensors_${days}_days.csv`
+    );
+}
+
+function downloadLogsCSV() {
+    const days = getReportDays();
+    downloadFileFromReport(
+        `${API}/report/csv/logs?days=${days}`,
+        `SmartHome_Logs_${days}_days.csv`
+    );
+}
+
 // ============================================================
 // SCHEDULER MODULE
 // ============================================================
+
+// Lưu mapping setting_id → device_id (vì API không trả về trong list)
+let scheduleDeviceMap = JSON.parse(localStorage.getItem("scheduleDeviceMap") || "{}");
+
+function saveScheduleDeviceMap(settingId, deviceId) {
+    scheduleDeviceMap[settingId] = Number(deviceId);
+    localStorage.setItem("scheduleDeviceMap", JSON.stringify(scheduleDeviceMap));
+}
 
 /**
  * Load danh sách controller vào dropdown lịch
@@ -1053,9 +1491,12 @@ async function loadScheduleDevices() {
     `;
 }
 
+/************************************OOOOOOOOOOO */
+
 /**
  * Lưu schedule mới 
  */
+
 async function saveSchedule() {
     const deviceId = document.getElementById("schedule-device").value;
     const timeVal  = document.getElementById("schedule-time").value; // "HH:MM"
@@ -1151,6 +1592,7 @@ async function loadSchedules() {
         }
 
         const schedules = await res.json();
+        console.log("loadSchedules data:", schedules);
 
         if (!schedules.length) {
             tbody.innerHTML = `
@@ -1165,19 +1607,27 @@ async function loadSchedules() {
         }
 
         tbody.innerHTML = schedules.map(item => {
-            const target = allDevicesCache.find(
-                d => d.id == item.target_device_id
-            );
+            // Tìm device qua mapping local (vì API không trả target_device_id)
+            const mappedDeviceId = scheduleDeviceMap[item.setting_id];
+            const target = mappedDeviceId
+                ? allDevicesCache.find(d => d.id == mappedDeviceId)
+                : null;
 
-            // Xác định trạng thái dựa trên thời gian
             const timeDisplay = item.time_start || item.time || "--:--";
             const statusInfo = getScheduleStatus(timeDisplay);
+
+            const schedZone = target ? getZoneLabel(target.zone_id) : "";
+            const deviceDisplay = target
+                ? escapeHtml(target.name)
+                : `<em>${escapeHtml(item.name)}</em>`;
+            const deviceIcon = target ? detectControllerIcon(target) : "fa-calendar-check";
 
             return `
                 <tr>
                     <td>
-                        <i class="fas ${target ? detectControllerIcon(target) : 'fa-plug'}"></i>
-                        ${target ? escapeHtml(target.name) : "N/A"}
+                        <i class="fas ${deviceIcon}"></i>
+                        ${deviceDisplay}
+                        ${schedZone ? `<div class="cell-zone">${escapeHtml(schedZone)}</div>` : ""}
                     </td>
                     <td>
                         <i class="fas fa-clock"></i>
@@ -1256,6 +1706,10 @@ async function deleteSchedule(settingId) {
             return;
         }
 
+        // Xóa mapping local
+        delete scheduleDeviceMap[settingId];
+        localStorage.setItem("scheduleDeviceMap", JSON.stringify(scheduleDeviceMap));
+
         showToast("Đã xóa lịch hẹn giờ", "success");
         loadSchedules();
 
@@ -1266,42 +1720,9 @@ async function deleteSchedule(settingId) {
 }
 
 
-/**
- * Kiểm tra sensor có đang vượt ngưỡng nào không
- * So sánh value với danh sách thresholds đã cache
- */
-function checkSensorAlert(sensor) {
-    if (sensor.value === null || sensor.value === undefined) return false;
-    const val = Number(sensor.value);
 
-    // Tìm tất cả threshold liên quan đến sensor này 
-    for (const t of allThresholdsCache) {
-        // threshold.name thường là tên sensor đã dùng khi tạo
-        if (t.name === sensor.name) {
-            // condition: true = >=, false = <=
-            if (t.condition && val >= t.value) return true;
-            if (!t.condition && val <= t.value) return true;
-        }
-    }
-    return false;
-}
 
-/**
- * Load thresholds cache (để dùng cho cảnh báo UI)
- */
-async function loadThresholdsCache() {
-    try {
-        const res = await fetch(`${API}/settings/thresholds`, {
-            method: "GET",
-            headers: authHeaders()
-        });
-        if (res.ok) {
-            allThresholdsCache = await res.json();
-        }
-    } catch (err) {
-        console.error("loadThresholdsCache error:", err);
-    }
-}
+
 
 // ============================================================
 // MEMBERS MODULE
@@ -1325,48 +1746,102 @@ async function addMember() {
         return;
     }
 
-    // Lấy home_id từ JWT payload
+    // Lấy home_id từ JWT admin hiện tại
     let homeId = null;
+
     try {
-        const payload = JSON.parse(atob(getToken().split('.')[1]));
-        homeId = payload.home_id || null;
-    } catch (e) {
-        console.warn("Không decode được JWT để lấy home_id");
+        const token = getToken();
+        const jwtData = JSON.parse(atob(token.split(".")[1]));
+
+        console.log("JWT:", jwtData);
+
+        homeId = jwtData.home_id || null;
+
+        // Nếu JWT không có home_id thì gọi API lấy info admin theo email
+        if (!homeId && jwtData.sub) {
+            const meRes = await fetch(
+                `${API}/users/${encodeURIComponent(jwtData.sub)}`,
+                {
+                    method: "GET",
+                    headers: authHeaders()
+                }
+            );
+
+            if (meRes.ok) {
+                const meData = await meRes.json();
+                homeId = meData.home_id || null;
+            }
+        }
+
+        console.log("homeId:", homeId);
+
+    } catch (err) {
+        console.error("Không đọc được home_id từ JWT:", err);
     }
 
-    const payload = {
+    if (!homeId) {
+        showToast("Không xác định được Home ID. Vui lòng đăng nhập lại.", "error");
+        return;
+    }
+
+    const body = {
         fname,
         lname,
         email,
         password,
         type,
-        home_id: homeId
+        home_id: Number(homeId)
     };
+
+    console.log("BODY gửi lên:", body);
 
     try {
         const res = await fetch(`${API}/users/`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
         });
 
+        let data = null;
+        const text = await res.text();
+
+        try {
+            data = text ? JSON.parse(text) : null;
+        } catch (_) {
+            data = null;
+        }
+
         if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            const msg = errData.detail || "Không thể tạo thành viên";
+            console.error("addMember RESPONSE:", res.status, text);
+
+            let msg = "Không thể tạo thành viên";
+
+            if (data && data.detail) {
+                msg = data.detail;
+            } else if (res.status === 500) {
+                msg = "Backend bị lỗi 500 khi tạo thành viên. Kiểm tra Railway Logs hoặc email có thể đã tồn tại.";
+            } else if (res.status === 422) {
+                msg = "Dữ liệu gửi lên không đúng định dạng.";
+            }
+
             showToast(String(msg), "error");
             return;
         }
 
-        const newUser = await res.json();
-        showToast(`Đã thêm thành viên ${newUser.fname} ${newUser.lname}`, "success");
+        const newUser = data;
 
-        // Lưu email vào danh sách để hiển thị
+        showToast(
+            `Đã thêm thành viên ${newUser.fname || fname} ${newUser.lname || lname}`,
+            "success"
+        );
+
         if (!membersList.includes(email)) {
             membersList.push(email);
             localStorage.setItem("membersList", JSON.stringify(membersList));
         }
 
-        // Reset form
         document.getElementById("member-fname").value = "";
         document.getElementById("member-lname").value = "";
         document.getElementById("member-email").value = "";
@@ -1376,7 +1851,11 @@ async function addMember() {
 
     } catch (err) {
         console.error("addMember error:", err);
-        showToast("Lỗi kết nối server", "error");
+
+        showToast(
+            "Không gọi được API tạo thành viên. Nếu Console báo CORS + 500 thì lỗi nằm ở backend.",
+            "error"
+        );
     }
 }
 
@@ -1562,6 +2041,222 @@ function exportLogsToPDF() {
 }
 
 // ============================================================
+// ZONES MODULE
+// ============================================================
+
+/**
+ * Load tất cả zones → cache + render accordion + populate floor filter
+ */
+async function loadZones() {
+    try {
+        const res = await fetch(`${API}/zones/`, {
+            method: "GET",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            allZonesCache = [];
+            renderZonesAccordion([]);
+            populateFloorFilter([]);
+            return;
+        }
+
+        const zones = await res.json();
+        allZonesCache = zones;
+        renderZonesAccordion(zones);
+        populateFloorFilter(zones);
+    } catch (err) {
+        console.error("loadZones error:", err);
+        allZonesCache = [];
+    }
+}
+
+/**
+ * Render zones dạng accordion nhóm theo tầng
+ */
+function renderZonesAccordion(zones) {
+    const container = document.getElementById("zones-accordion");
+    if (!container) return;
+
+    if (!zones.length) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-building"></i>
+                Chưa có khu vực nào. Hãy tạo khu vực mới bằng form bên trên.
+            </div>`;
+        return;
+    }
+
+    // Nhóm theo tầng
+    const floors = [...new Set(zones.map(z => z.floor))].sort((a, b) => a - b);
+
+    container.innerHTML = floors.map(floor => {
+        const rooms = zones.filter(z => z.floor === floor);
+        // Đếm thiết bị trên tầng này
+        const devicesOnFloor = allDevicesCache.filter(d => {
+            const z = allZonesCache.find(zone => zone.id === d.zone_id);
+            return z && z.floor === floor;
+        });
+
+        return `
+            <div class="zone-floor-group">
+                <div class="zone-floor-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="zone-floor-title">
+                        <i class="fas fa-layer-group"></i>
+                        <span>Tầng ${floor}</span>
+                        <span class="badge">${rooms.length} phòng</span>
+                        <span class="badge" style="background:rgba(16,185,129,0.12);color:var(--success);">${devicesOnFloor.length} thiết bị</span>
+                    </div>
+                    <div class="zone-floor-actions">
+                        <button class="btn-trash" title="Xóa cả tầng ${floor}" onclick="event.stopPropagation(); deleteFloor(${floor})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <i class="fas fa-chevron-down zone-chevron"></i>
+                    </div>
+                </div>
+                <div class="zone-floor-body">
+                    ${rooms.map(z => {
+                        const devCount = allDevicesCache.filter(d => d.zone_id === z.id).length;
+                        return `
+                            <div class="zone-room-item">
+                                <div class="zone-room-info">
+                                    <i class="fas fa-door-open"></i>
+                                    <span class="zone-room-name">${escapeHtml(z.room)}</span>
+                                    <span class="zone-device-count">${devCount} thiết bị</span>
+                                </div>
+                                <button class="btn-trash" title="Xóa phòng" onclick="deleteZone(${z.id}, '${escapeHtml(z.room)}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                    }).join("")}
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+/**
+ * Populate floor filter dropdown trên Dashboard
+ */
+function populateFloorFilter(zones) {
+    const select = document.getElementById("floor-filter");
+    if (!select) return;
+
+    const floors = [...new Set(zones.map(z => z.floor))].sort((a, b) => a - b);
+    select.innerHTML = `
+        <option value="all"><i class="fas fa-globe"></i> Tất cả khu vực</option>
+        ${floors.map(f => `<option value="${f}" ${currentFloorFilter == f ? "selected" : ""}>Tầng ${f}</option>`).join("")}
+    `;
+}
+
+/**
+ * Xử lý filter theo tầng trên Dashboard
+ */
+function filterByFloor(value) {
+    currentFloorFilter = value;
+    loadDevices();
+}
+
+/**
+ * Tạo zone mới → POST /api/v1/zones/
+ */
+async function createZone() {
+    const floorInput = document.getElementById("zone-floor");
+    const roomInput  = document.getElementById("zone-room");
+
+    const floor = parseInt(floorInput.value, 10);
+    const room  = roomInput.value.trim();
+
+    if (isNaN(floor) || floor < 0) {
+        showToast("Vui lòng nhập số tầng hợp lệ", "error");
+        return;
+    }
+    if (!room) {
+        showToast("Vui lòng nhập tên phòng", "error");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API}/zones/`, {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ floor, room })
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(errText);
+            showToast("Không thể tạo khu vực", "error");
+            return;
+        }
+
+        showToast(`Đã tạo: Tầng ${floor} – ${room}`, "success");
+        floorInput.value = "";
+        roomInput.value = "";
+        await loadZones();
+
+    } catch (err) {
+        console.error("createZone error:", err);
+        showToast("Lỗi kết nối server", "error");
+    }
+}
+
+/**
+ * Xóa 1 zone → DELETE /api/v1/zones/{zone_id}
+ */
+async function deleteZone(zoneId, roomName = "") {
+    if (!confirm(`Xóa phòng "${roomName}"?\n(Chỉ xóa được nếu phòng không còn thiết bị)`)) return;
+
+    try {
+        const res = await fetch(`${API}/zones/${zoneId}`, {
+            method: "DELETE",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.detail || "Không thể xóa phòng (có thể còn thiết bị)", "error");
+            return;
+        }
+
+        showToast(`Đã xóa phòng "${roomName}"`, "success");
+        await loadZones();
+
+    } catch (err) {
+        console.error("deleteZone error:", err);
+        showToast("Lỗi kết nối server", "error");
+    }
+}
+
+/**
+ * Xóa cả tầng → DELETE /api/v1/zones/floor/{floor}
+ */
+async function deleteFloor(floor) {
+    if (!confirm(`Xóa TẤT CẢ phòng trên Tầng ${floor}?\n(Chỉ xóa được nếu không còn thiết bị nào)`)) return;
+
+    try {
+        const res = await fetch(`${API}/zones/floor/${floor}`, {
+            method: "DELETE",
+            headers: authHeaders()
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.detail || "Không thể xóa tầng (có thể còn thiết bị)", "error");
+            return;
+        }
+
+        showToast(`Đã xóa tất cả phòng trên Tầng ${floor}`, "success");
+        await loadZones();
+
+    } catch (err) {
+        console.error("deleteFloor error:", err);
+        showToast("Lỗi kết nối server", "error");
+    }
+}
+window.addMember = addMember;
+// ============================================================
 // INIT
 // ============================================================
 window.addEventListener("load", async () => {
@@ -1569,11 +2264,14 @@ window.addEventListener("load", async () => {
     if (!checkAuth()) return;
     applyPermissions(getRole());
 
-    // Load threshold cache cho cảnh báo
-    await loadThresholdsCache();
+    // Load zones + thresholds cache TRƯỚC (cần cho device cards + cảnh báo)
+    await Promise.all([loadZones(), loadThresholdsCache()]);
 
     loadReportChart();
-    loadDevices();
+    loadReportSummary();
+    await loadDevices();
+
+    // Sau khi devices đã load → scheduler + logs + members
     fetchLogs();
     loadScheduleDevices();
     loadSchedules();
@@ -1581,5 +2279,8 @@ window.addEventListener("load", async () => {
 });
 // Polling
 setInterval(loadDevices, POLL_INTERVAL_MS);
-setInterval(loadReportChart, 30000);
-setInterval(loadThresholdsCache, 30000);
+setInterval(loadReportChart, 10000);
+setInterval(loadReportSummary, 30000);
+//setInterval(loadThresholdsCache, 30000);
+
+

@@ -306,6 +306,95 @@ body {
     opacity: 0.5; cursor: not-allowed;
 }
 
+/* ===== Fan Speed Control ===== */
+.fan-mode-control {
+    margin-top: 14px;
+}
+
+.disabled-control {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.disabled-control .speed-btn {
+    cursor: not-allowed;
+}
+
+.fan-speed-control {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 12px 16px 8px;
+    margin-top: 4px;
+}
+.speed-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.speed-buttons {
+    display: flex;
+    gap: 8px;
+}
+.speed-btn {
+    flex: 1;
+    padding: 8px 4px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: all 0.25s ease;
+}
+.speed-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.speed-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+.speed-btn.active.low {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+.speed-btn.active.med {
+    background: rgba(251, 191, 36, 0.15);
+    border-color: var(--warning);
+    color: var(--warning);
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.2);
+}
+.speed-btn.active.high {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: var(--danger);
+    color: var(--danger);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+/* Fan icon spinning animation */
+@keyframes fanSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+.fan-spinning i.fa-fan {
+    animation: fanSpin 1.2s linear infinite;
+    color: var(--primary);
+}
+.fan-card .card-icon {
+    transition: all 0.3s ease;
+}
+
 /* ===== Buttons ===== */
 .btn-primary {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
@@ -887,4 +976,243 @@ body {
 .role-member {
     background: rgba(56, 189, 248, 0.12);
     color: var(--primary);
+}
+
+/* =========================================================
+   ZONES: Accordion by Floor
+========================================================= */
+
+.zones-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.zone-floor-group {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: border-color 0.3s;
+}
+
+.zone-floor-group:hover {
+    border-color: rgba(56, 189, 248, 0.25);
+}
+
+.zone-floor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 22px;
+    cursor: pointer;
+    background: rgba(255,255,255,0.02);
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.zone-floor-header:hover {
+    background: rgba(56, 189, 248, 0.06);
+}
+
+.zone-floor-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-main);
+}
+
+.zone-floor-title i {
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.zone-floor-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.zone-chevron {
+    color: var(--text-muted);
+    transition: transform 0.3s;
+    font-size: 0.85rem;
+}
+
+.zone-floor-group.open .zone-chevron {
+    transform: rotate(180deg);
+}
+
+.zone-floor-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, padding 0.35s ease;
+    padding: 0 22px;
+}
+
+.zone-floor-group.open .zone-floor-body {
+    max-height: 600px;
+    padding: 8px 22px 18px;
+}
+
+.zone-room-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.zone-room-item:hover {
+    background: rgba(56, 189, 248, 0.06);
+    border-color: rgba(56, 189, 248, 0.2);
+}
+
+.zone-room-item:last-child {
+    margin-bottom: 0;
+}
+
+.zone-room-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.zone-room-info i {
+    color: var(--warning);
+    font-size: 1rem;
+}
+
+.zone-room-name {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.zone-device-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.06);
+    padding: 2px 10px;
+    border-radius: 999px;
+}
+
+/* =========================================================
+   CARD ZONE LABEL (on device cards)
+========================================================= */
+
+.card-zone {
+    font-size: 0.72rem;
+    color: var(--warning);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.card-zone i {
+    font-size: 0.65rem;
+}
+
+/* =========================================================
+   CELL ZONE SUB-LABEL (in tables)
+========================================================= */
+
+.cell-zone {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-style: italic;
+}
+
+/* =========================================================
+   FLOOR FILTER (Dashboard toolbar)
+========================================================= */
+
+.floor-filter {
+    height: 40px;
+    padding: 0 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    color: var(--text-main);
+    font-size: 0.88rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.floor-filter:focus {
+    border-color: var(--primary);
+}
+
+.floor-filter option {
+    color: #111827;
+}
+
+
+/*REPORT CSS*/
+.report-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.report-kpi-card {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.report-kpi-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    font-size: 20px;
+}
+
+.report-kpi-value {
+    font-size: 26px;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
+.report-kpi-label {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.filters select {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #0f172a;
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.35);
 }
