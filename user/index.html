@@ -113,7 +113,7 @@
             <header class="header">
                 <div class="greeting">
                     <p id="greeting-text">Chào buổi sáng,</p>
-                    <h3>Nhà của bạn</h3>
+                    <h3 id="home-name-text">Nhà của bạn</h3>
                 </div>
                 <div class="user-actions">
                     <div class="theme-toggle" id="theme-toggle" title="Đổi giao diện">
@@ -215,6 +215,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         else if (currentHour >= 14 && currentHour < 18) greetingElement.innerHTML = 'Chào buổi chiều, 🌤️';
         else greetingElement.innerHTML = 'Chào buổi tối, 🌙';
     }
+    // HÀM TỰ ĐỘNG LẤY TÊN NHÀ VÀ TÊN NGƯỜI DÙNG LÊN HEADER
+    async function loadHeaderInfo() {
+        try {
+            const token = localStorage.getItem('access_token');
+            let userEmail = "";
+            if (token) {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const decoded = JSON.parse(decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join('')));
+                userEmail = decoded.sub || decoded.email || ""; 
+            }
+            const resUser = await API.request(userEmail ? `/users/${userEmail}` : '/users/me');
+            const userData = Array.isArray(resUser) ? resUser[0] : resUser;
+            console.log("Dữ liệu User từ Backend:", userData);
+
+            if (userData) {
+                const homeNameEl = document.getElementById('home-name-text');
+                if (homeNameEl && userData.home_name) {
+                    homeNameEl.innerText = userData.home_name;
+                }
+                const greetingEl = document.getElementById('greeting-text');
+                if (greetingEl && userData.fname) {
+                    greetingEl.innerHTML = greetingEl.innerHTML.replace(',', `, ${userData.fname}`);
+                }
+            }
+        } catch (error) {
+            console.log("Giữ nguyên tên mặc định vì chưa lấy được dữ liệu nhà.");
+        }
+    }
+    loadHeaderInfo();
 
     // --- XỬ LÝ GIAO DIỆN SÁNG/TỐI (DARK/LIGHT MODE) ---
     const themeToggle = document.getElementById('theme-toggle');
@@ -335,7 +367,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             const userData = Array.isArray(resUser) ? resUser[0] : resUser;
 
             if (userData) {
-                const letter = (userData.first_name || userData.last_name || userData.email || "U")[0].toUpperCase();
+                // Sửa thành fname và lname theo đúng mô tả của Backend
+                const firstName = userData.fname || "";
+                const lastName = userData.lname || "";
+                const email = userData.email || "";
+                
+                // Ghép họ và tên
+                let fullName = `${lastName} ${firstName}`.trim();
+                const displayName = fullName ? fullName : "Chưa cập nhật tên";
+                
+                // Lấy chữ cái đầu (ưu tiên first name, nếu không có thì lấy email, không có nữa thì lấy U)
+                const firstLetter = firstName ? firstName.charAt(0) : (email ? email.charAt(0) : "U");
+                const letter = firstLetter.toUpperCase();
+                
                 const typeText = userData.type || userData.role || "Member";
 
                 displayBox.innerHTML = `
@@ -344,8 +388,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                             ${letter}
                         </div>
                         <div>
-                            <h4 style="margin: 0 0 5px 0; font-size: 20px; color: var(--text-primary);">${userData.last_name || ""} ${userData.first_name || ""}</h4>
-                            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">${userData.email}</p>
+                            <h4 style="margin: 0 0 5px 0; font-size: 20px; color: var(--text-primary);">${displayName}</h4>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: 14px;">${email}</p>
                         </div>
                     </div>
                     
@@ -353,6 +397,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
                             <span style="color: var(--text-secondary);"><i class="fa-solid fa-id-badge" style="width: 20px;"></i> Vai trò</span>
                             <strong style="text-transform: capitalize; color: #4dacff; background: rgba(77,172,255,0.1); padding: 2px 10px; border-radius: 6px;">${typeText}</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-circle-check" style="width: 20px;"></i> Trạng thái</span>
+                            <strong style="text-transform: capitalize; color: #4dacff;">${userData.status || 'Active'}</strong>
                         </div>
                         ${userData.home_id ? `
                         <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.05);">
