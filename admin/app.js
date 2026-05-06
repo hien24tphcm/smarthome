@@ -358,9 +358,14 @@ function renderSensors(sensors) {
                         <div class="card-feed">${escapeHtml(d.feed_id)}</div>
                         ${getZoneLabel(d.zone_id) ? `<div class="card-zone"><i class="fas fa-map-pin"></i> ${escapeHtml(getZoneLabel(d.zone_id))}</div>` : ""}
                     </div>
-                    <button class="btn-trash" title="Xoá thiết bị" onclick="deleteDevice(${d.id}, '${escapeHtml(d.name)}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-secondary" title="Sửa thiết bị" onclick="editDevice(${d.id})">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="btn-trash" title="Xoá thiết bị" onclick="deleteDevice(${d.id}, '${escapeHtml(d.name)}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="sensor-value-big">
                     <span>${value}</span>
@@ -451,9 +456,14 @@ function renderControllers(controllers) {
                         <div class="card-feed">${escapeHtml(d.feed_id)}</div>
                         ${getZoneLabel(d.zone_id) ? `<div class="card-zone"><i class="fas fa-map-pin"></i> ${escapeHtml(getZoneLabel(d.zone_id))}</div>` : ""}
                     </div>
-                    <button class="btn-trash" title="Xoá thiết bị" onclick="deleteDevice(${d.id}, '${escapeHtml(d.name)}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-secondary" title="Sửa thiết bị" onclick="editDevice(${d.id})">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="btn-trash" title="Xoá thiết bị" onclick="deleteDevice(${d.id}, '${escapeHtml(d.name)}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="controller-state">
                     <div class="state-label ${isOn ? 'state-on' : 'state-off'}">
@@ -756,6 +766,10 @@ async function deleteDevice(deviceId, deviceName = "") {
 let allDevicesCache = [];
 let allThresholdsCache = [];
 let allZonesCache = [];
+
+let thresholdSensorMap = JSON.parse(localStorage.getItem("thresholdSensorMap") || "{}");
+let thresholdTargetMap = JSON.parse(localStorage.getItem("thresholdTargetMap") || "{}");
+
 let currentFloorFilter = "all";
 
 /** Tìm zone name từ zone_id */
@@ -827,21 +841,20 @@ async function loadThresholdDevices() {
  */
 // thêm vào bên trong saveThreshold()
 async function saveThreshold() {
+    const name = document.getElementById("threshold-name")?.value.trim();
     const sensorId = document.getElementById("threshold-sensor").value;
     const value = document.getElementById("threshold-value").value;
     const condition = document.getElementById("threshold-condition").value;
     const targetDeviceId = document.getElementById("threshold-target-device").value;
     const action = document.getElementById("threshold-action").value;
 
-    if (!sensorId || !value || !targetDeviceId) {
-        showToast("Vui lòng nhập đầy đủ thông tin", "error");
+    if (!name || !sensorId || value === "" || !targetDeviceId) {
+        showToast("Vui lòng nhập tên setting, cảm biến, ngưỡng và thiết bị phản ứng", "error");
         return;
     }
 
-    const sensor = allDevicesCache.find(d => d.id == sensorId);
-
     const payload = {
-        name: sensor ? sensor.name : "Threshold Rule",
+        name,
         action: String(action).toUpperCase(),
         value: Number(value),
         condition: condition === "true",
@@ -852,9 +865,7 @@ async function saveThreshold() {
     try {
         const res = await fetch(`${API}/settings/thresholds`, {
             method: "POST",
-            headers: authHeaders({
-                "Content-Type": "application/json"
-            }),
+            headers: authHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify(payload)
         });
 
@@ -865,43 +876,26 @@ async function saveThreshold() {
             return;
         }
 
-        // lấy threshold vừa tạo
         const createdThreshold = await res.json();
+        const settingId = createdThreshold.setting_id || createdThreshold.id;
 
-        console.log("CREATED THRESHOLD =", createdThreshold);
+        const ok = await initSettingDevice(settingId, sensorId, "threshold");
+        if (!ok) return;
 
-        const settingId =
-            createdThreshold.setting_id ||
-            createdThreshold.id;
+        thresholdSensorMap[settingId] = Number(sensorId);
+        thresholdTargetMap[settingId] = Number(targetDeviceId);
 
-        console.log("SETTING ID =", settingId);
-        console.log("SENSOR ID =", sensorId);
+        localStorage.setItem("thresholdSensorMap", JSON.stringify(thresholdSensorMap));
+        localStorage.setItem("thresholdTargetMap", JSON.stringify(thresholdTargetMap));
 
+        showToast("Đã tạo setting ngưỡng và gắn thiết bị thành công", "success");
 
-        const applyRes = await fetch(
-            `${API}/settings/${settingId}/apply/${sensorId}`,
-            {
-                method: "POST",
-                headers: authHeaders()
-            }
-        );
-
-        if (!applyRes.ok) {
-            const errText = await applyRes.text();
-            console.error(errText);
-            showToast("Tạo ngưỡng thành công nhưng APPLY thất bại", "error");
-            return;
-        }
-
-        showToast("Đã tạo và áp dụng ngưỡng thành công", "success");
-
+        document.getElementById("threshold-name").value = "";
         document.getElementById("threshold-value").value = "";
 
-        try {
-            await loadThresholds();
-        } catch (e) {
-            console.warn("Tạo ngưỡng OK nhưng không tải được danh sách ngưỡng:", e);
-}
+        await loadThresholdsCache();
+        await loadThresholds();
+        await loadDevices();
 
     } catch (err) {
         console.error("saveThreshold error:", err);
@@ -917,11 +911,7 @@ async function loadThresholds() {
     const tbody = document.getElementById("threshold-table-body");
     if (!tbody) return;
 
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="5">Đang tải dữ liệu...</td>
-        </tr>
-    `;
+    tbody.innerHTML = `<tr><td colspan="7">Đang tải dữ liệu...</td></tr>`;
 
     try {
         const res = await fetch(`${API}/settings/thresholds`, {
@@ -930,49 +920,60 @@ async function loadThresholds() {
         });
 
         if (!res.ok) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5">Chưa có dữ liệu</td>
-                </tr>
-            `;
+            tbody.innerHTML = `<tr><td colspan="7">Chưa có dữ liệu</td></tr>`;
             return;
         }
 
         const thresholds = await res.json();
+        allThresholdsCache = thresholds;
 
         if (!thresholds.length) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5">Chưa có ngưỡng nào</td>
-                </tr>
-            `;
+            tbody.innerHTML = `<tr><td colspan="7">Chưa có ngưỡng nào</td></tr>`;
             return;
         }
 
         tbody.innerHTML = thresholds.map(item => {
-            const target = allDevicesCache.find(
-                d => d.id == item.target_device_id
-            );
+            const settingId = item.setting_id || item.id;
+
+            const sensorId =
+                item.sensor_id ||
+                item.device_id ||
+                thresholdSensorMap[settingId];
+
+            const targetId =
+                item.target_device_id ||
+                thresholdTargetMap[settingId];
+
+            const sensor = sensorId
+                ? allDevicesCache.find(d => d.id == sensorId)
+                : null;
+
+            const target = targetId
+                ? allDevicesCache.find(d => d.id == targetId)
+                : null;
 
             return `
                 <tr>
                     <td>${escapeHtml(item.name)}</td>
+
+                    <td>${sensor ? escapeHtml(sensor.name) : "--"}</td>
+
+                    <td>${item.condition ? "≥" : "≤"} ${item.value}</td>
+
+                    <td>${target ? escapeHtml(target.name) : "N/A"}</td>
+
                     <td>
-                        ${item.condition ? "≥" : "≤"} ${item.value}
+                        ${String(item.action).toUpperCase() === "ON" ? "Bật" : "Tắt"}
                     </td>
+
                     <td>
-                        ${target ? escapeHtml(target.name) : "N/A"}
+                        <button class="btn-secondary" onclick="editThreshold(${settingId})" title="Sửa ngưỡng">
+                            <i class="fas fa-pen"></i>
+                        </button>
                     </td>
+
                     <td>
-                        ${String(item.action).toUpperCase() === "ON"
-                            ? "Bật"
-                            : "Tắt"}
-                    </td>
-                    <td>
-                        <button
-                            class="btn-trash"
-                            onclick="deleteThreshold(${item.setting_id})"
-                        >
+                        <button class="btn-trash" onclick="deleteThreshold(${settingId})" title="Xóa ngưỡng">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -982,11 +983,7 @@ async function loadThresholds() {
 
     } catch (err) {
         console.error("loadThresholds error:", err);
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5">Lỗi tải dữ liệu</td>
-            </tr>
-        `;
+        tbody.innerHTML = `<tr><td colspan="7">Lỗi tải dữ liệu</td></tr>`;
     }
 }
 
@@ -1014,8 +1011,17 @@ async function deleteThreshold(settingId) {
             return;
         }
 
+        delete thresholdSensorMap[settingId];
+        delete thresholdTargetMap[settingId];
+
+        localStorage.setItem("thresholdSensorMap", JSON.stringify(thresholdSensorMap));
+        localStorage.setItem("thresholdTargetMap", JSON.stringify(thresholdTargetMap));
+
         showToast("Đã xóa ngưỡng thành công", "success");
+
         loadThresholds();
+        loadThresholdsCache();
+        loadDevices();
 
     } catch (err) {
         console.error("deleteThreshold error:", err);
@@ -1052,10 +1058,12 @@ function checkSensorAlert(sensor) {
     const val = Number(sensor.value);
 
     for (const t of allThresholdsCache) {
-        const sameSensor =
-            t.name === sensor.name ||
-            String(t.sensor_id) === String(sensor.id);
+        const settingId = t.setting_id || t.id;
+        const mappedSensorId = t.sensor_id || t.device_id || thresholdSensorMap[settingId];
 
+        const sameSensor =
+            String(mappedSensorId) === String(sensor.id) ||
+            (!mappedSensorId && t.name === sensor.name);
         if (!sameSensor) continue;
 
         if (t.condition && val >= Number(t.value)) return true;
@@ -1373,16 +1381,28 @@ function renderReportAutomations(automations) {
     if (!tbody) return;
 
     if (!automations.length) {
-        tbody.innerHTML = `<tr><td colspan="5">Chưa có tự động hóa nào</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9">Chưa có tự động hóa nào</td></tr>`;
         return;
     }
 
     tbody.innerHTML = automations.map(a => `
         <tr>
             <td>${escapeHtml(a.name)}</td>
+
             <td>${escapeHtml(a.type)}</td>
+
             <td>${escapeHtml(a.action)}</td>
+
+            <td>${formatDateOnly(a.date_start)}</td>
+
+            <td>${formatDateOnly(a.date_end)}</td>
+
+            <td>${escapeHtml(a.time_start || "--")}</td>
+
+            <td>${formatTimerMinutes(a.timer)}</td>
+
             <td>${a.trigger_count ?? 0}</td>
+
             <td>${escapeHtml(a.applied_devices || "--")}</td>
         </tr>
     `).join("");
@@ -1498,27 +1518,38 @@ async function loadScheduleDevices() {
  */
 
 async function saveSchedule() {
+    const name = document.getElementById("schedule-name")?.value.trim();
     const deviceId = document.getElementById("schedule-device").value;
-    const timeVal  = document.getElementById("schedule-time").value; // "HH:MM"
+    const dateStart = document.getElementById("schedule-date-start")?.value;
+    const dateEnd = document.getElementById("schedule-date-end")?.value;
+    const timeVal  = document.getElementById("schedule-time").value;
+    const timerVal = document.getElementById("schedule-timer")?.value;
     const action   = document.getElementById("schedule-action").value;
 
-    if (!deviceId || !timeVal) {
-        showToast("Vui lòng chọn thiết bị và thời gian", "error");
+    if (!name || !deviceId || !dateStart || !timeVal) {
+        showToast("Vui lòng nhập tên setting, thiết bị, ngày bắt đầu và thời gian", "error");
         return;
     }
 
-    // Tìm tên thiết bị từ cache
-    const device = allDevicesCache.find(d => d.id == deviceId);
+    if (dateEnd && dateEnd < dateStart) {
+        showToast("Ngày kết thúc không được nhỏ hơn ngày bắt đầu", "error");
+        return;
+    }
 
-    // API ScheduleCreate cần: name, action, date_start (YYYY-MM-DD), time_start (HH:MM:SS)
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const timer = timerVal ? Number(timerVal) : null;
+
+    if (timer !== null && (Number.isNaN(timer) || timer <= 0)) {
+        showToast("Thời lượng phải là số phút lớn hơn 0", "error");
+        return;
+    }
 
     const payload = {
-        name: device ? device.name : "Schedule",
+        name,
         action: String(action).toUpperCase(),
-        date_start: today,
-        time_start: timeVal + ":00",          // "HH:MM:SS"
-        target_device_id: Number(deviceId),
+        date_start: dateStart,
+        date_end: dateEnd || null,
+        time_start: timeVal.length === 5 ? timeVal + ":00" : timeVal,
+        timer,
         type: "schedule"
     };
 
@@ -1539,22 +1570,20 @@ async function saveSchedule() {
         const created = await res.json();
         const settingId = created.setting_id || created.id;
 
-        // Apply cho thiết bị
-        const applyRes = await fetch(
-            `${API}/settings/${settingId}/apply/${deviceId}`,
-            {
-                method: "POST",
-                headers: authHeaders()
-            }
-        );
+        const ok = await initSettingDevice(settingId, deviceId, "schedule");
+        if (!ok) return;
 
-        if (!applyRes.ok) {
-            showToast("Tạo lịch thành công nhưng APPLY thất bại", "error");
-        } else {
-            showToast("Đã tạo và áp dụng lịch hẹn giờ", "success");
-        }
+        saveScheduleDeviceMap(settingId, deviceId);
 
+        showToast("Đã tạo setting lịch và gắn thiết bị thành công", "success");
+
+        document.getElementById("schedule-name").value = "";
+        document.getElementById("schedule-device").value = "";
+        document.getElementById("schedule-date-start").value = "";
+        document.getElementById("schedule-date-end").value = "";
         document.getElementById("schedule-time").value = "";
+        document.getElementById("schedule-timer").value = "";
+
         await loadSchedules();
 
     } catch (err) {
@@ -1572,7 +1601,7 @@ async function loadSchedules() {
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="5">
+            <td colspan="10">
                 <i class="fas fa-spinner fa-spin"></i> Đang tải lịch hẹn giờ...
             </td>
         </tr>
@@ -1586,7 +1615,7 @@ async function loadSchedules() {
 
         if (!res.ok) {
             tbody.innerHTML = `
-                <tr><td colspan="5">Chưa có dữ liệu</td></tr>
+                <tr><td colspan="10">Chưa có dữ liệu</td></tr>
             `;
             return;
         }
@@ -1597,7 +1626,7 @@ async function loadSchedules() {
         if (!schedules.length) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="5" class="empty-state">
+                    <td colspan="10" class="empty-state">
                         <i class="fas fa-clock"></i>
                         Chưa có lịch hẹn giờ nào
                     </td>
@@ -1608,7 +1637,8 @@ async function loadSchedules() {
 
         tbody.innerHTML = schedules.map(item => {
             // Tìm device qua mapping local (vì API không trả target_device_id)
-            const mappedDeviceId = scheduleDeviceMap[item.setting_id];
+            const settingId = item.setting_id || item.id;
+            const mappedDeviceId = item.target_device_id || item.device_id || scheduleDeviceMap[settingId];
             const target = mappedDeviceId
                 ? allDevicesCache.find(d => d.id == mappedDeviceId)
                 : null;
@@ -1617,40 +1647,52 @@ async function loadSchedules() {
             const statusInfo = getScheduleStatus(timeDisplay);
 
             const schedZone = target ? getZoneLabel(target.zone_id) : "";
-            const deviceDisplay = target
-                ? escapeHtml(target.name)
-                : `<em>${escapeHtml(item.name)}</em>`;
+            const deviceDisplay = target ? escapeHtml(target.name) : "--";
             const deviceIcon = target ? detectControllerIcon(target) : "fa-calendar-check";
 
             return `
                 <tr>
+                    <td>${escapeHtml(item.name)}</td>
+
                     <td>
                         <i class="fas ${deviceIcon}"></i>
                         ${deviceDisplay}
                         ${schedZone ? `<div class="cell-zone">${escapeHtml(schedZone)}</div>` : ""}
                     </td>
+
+                    <td>${formatDateOnly(item.date_start)}</td>
+
+                    <td>${formatDateOnly(item.date_end)}</td>
+
                     <td>
                         <i class="fas fa-clock"></i>
                         <strong>${escapeHtml(timeDisplay)}</strong>
                     </td>
+
+                    <td>${formatTimerMinutes(item.timer)}</td>
+
                     <td>
                         <span class="${String(item.action).toUpperCase() === 'ON' ? 'status-success' : 'status-error'}">
                             <i class="fas fa-power-off"></i>
                             ${String(item.action).toUpperCase() === "ON" ? "Bật" : "Tắt"}
                         </span>
                     </td>
+
                     <td>
                         <span class="${statusInfo.class}">
                             <i class="fas ${statusInfo.icon}"></i>
                             ${statusInfo.label}
                         </span>
                     </td>
+
                     <td>
-                        <button
-                            class="btn-trash"
-                            onclick="deleteSchedule(${item.setting_id})"
-                            title="Xóa lịch"
-                        >
+                        <button class="btn-secondary" onclick="editSchedule(${settingId})" title="Sửa lịch">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                    </td>
+
+                    <td>
+                        <button class="btn-trash" onclick="deleteSchedule(${settingId})" title="Xóa lịch">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1661,9 +1703,36 @@ async function loadSchedules() {
     } catch (err) {
         console.error("loadSchedules error:", err);
         tbody.innerHTML = `
-            <tr><td colspan="5">Lỗi tải dữ liệu</td></tr>
+            <tr><td colspan="10">Lỗi tải dữ liệu</td></tr>
         `;
     }
+}
+function formatDateOnly(dateStr) {
+    if (!dateStr) return "--";
+
+    const s = String(dateStr).slice(0, 10);
+    const parts = s.split("-");
+
+    if (parts.length !== 3) return escapeHtml(s);
+
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function formatTimerMinutes(timer) {
+    if (timer === null || timer === undefined || timer === "") return "--";
+
+    const mins = Number(timer);
+
+    if (Number.isNaN(mins) || mins <= 0) return "--";
+
+    if (mins < 60) return `${mins} phút`;
+
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+
+    if (m === 0) return `${h} giờ`;
+
+    return `${h} giờ ${m} phút`;
 }
 
 /**
@@ -2124,9 +2193,15 @@ function renderZonesAccordion(zones) {
                                     <span class="zone-room-name">${escapeHtml(z.room)}</span>
                                     <span class="zone-device-count">${devCount} thiết bị</span>
                                 </div>
-                                <button class="btn-trash" title="Xóa phòng" onclick="deleteZone(${z.id}, '${escapeHtml(z.room)}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div style="display:flex;gap:8px;">
+                                    <button class="btn-secondary" title="Sửa phòng" onclick="editZone(${z.id})">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+
+                                    <button class="btn-trash" title="Xóa phòng" onclick="deleteZone(${z.id}, '${escapeHtml(z.room)}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                         `;
                     }).join("")}
@@ -2257,6 +2332,745 @@ async function deleteFloor(floor) {
 }
 window.addMember = addMember;
 // ============================================================
+// EDIT / INIT HELPERS
+// ============================================================
+
+function ensureEditModal() {
+    if (document.getElementById("edit-modal")) return;
+
+    const style = document.createElement("style");
+    style.innerHTML = `
+        .edit-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(2, 6, 23, 0.72);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .edit-modal-overlay.active {
+            display: flex;
+        }
+
+        .edit-modal-box {
+            width: min(760px, 96vw);
+            max-height: 92vh;
+            overflow-y: auto;
+            background: #0f172a;
+            border: 1px solid rgba(56, 189, 248, .25);
+            border-radius: 18px;
+            box-shadow: 0 24px 80px rgba(0,0,0,.5);
+            color: #e5e7eb;
+        }
+
+        .edit-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 22px;
+            border-bottom: 1px solid rgba(148, 163, 184, .16);
+        }
+
+        .edit-modal-header h3 {
+            margin: 0;
+            color: #38bdf8;
+            font-size: 20px;
+        }
+
+        .edit-modal-close {
+            border: none;
+            background: rgba(239,68,68,.14);
+            color: #fca5a5;
+            border-radius: 10px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .edit-modal-body {
+            padding: 20px 22px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .edit-modal-field.full {
+            grid-column: 1 / -1;
+        }
+
+        .edit-modal-field label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .edit-modal-field input,
+        .edit-modal-field select {
+            width: 100%;
+            padding: 12px 14px;
+            background: #020617;
+            color: #e5e7eb;
+            border: 1px solid rgba(148, 163, 184, .25);
+            border-radius: 12px;
+            outline: none;
+        }
+
+        .edit-modal-field input:focus,
+        .edit-modal-field select:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56,189,248,.12);
+        }
+
+        .edit-modal-error {
+            grid-column: 1 / -1;
+            min-height: 20px;
+            color: #fca5a5;
+            font-size: 14px;
+        }
+
+        .edit-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 16px 22px 22px;
+            border-top: 1px solid rgba(148, 163, 184, .16);
+        }
+
+        @media (max-width: 720px) {
+            .edit-modal-body {
+                grid-template-columns: 1fr;
+            }
+
+            .edit-modal-field.full {
+                grid-column: auto;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
+    const modal = document.createElement("div");
+    modal.id = "edit-modal";
+    modal.className = "edit-modal-overlay";
+    modal.innerHTML = `
+        <div class="edit-modal-box">
+            <div class="edit-modal-header">
+                <h3 id="edit-modal-title">Chỉnh sửa</h3>
+
+                <button class="edit-modal-close" type="button" onclick="closeEditModal()">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="edit-modal-form">
+                <div class="edit-modal-body" id="edit-modal-body"></div>
+
+                <div class="edit-modal-footer">
+                    <button class="btn-ghost" type="button" onclick="closeEditModal()">
+                        Huỷ
+                    </button>
+
+                    <button class="btn-primary" type="submit">
+                        <i class="fas fa-save"></i> Lưu thay đổi
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.addEventListener("click", e => {
+        if (e.target === modal) closeEditModal();
+    });
+}
+
+function closeEditModal() {
+    const modal = document.getElementById("edit-modal");
+    if (modal) modal.classList.remove("active");
+}
+
+function openEditModal({ title, fields, onSubmit }) {
+    ensureEditModal();
+
+    const modal = document.getElementById("edit-modal");
+    const titleEl = document.getElementById("edit-modal-title");
+    const body = document.getElementById("edit-modal-body");
+    const form = document.getElementById("edit-modal-form");
+
+    titleEl.innerText = title;
+
+    body.innerHTML = fields.map(field => {
+        const fullClass = field.full ? " full" : "";
+        const required = field.required ? "required" : "";
+        const min = field.min !== undefined ? `min="${field.min}"` : "";
+        const max = field.max !== undefined ? `max="${field.max}"` : "";
+        const step = field.step !== undefined ? `step="${field.step}"` : "";
+        const placeholder = field.placeholder ? `placeholder="${escapeHtml(field.placeholder)}"` : "";
+        const value = field.value ?? "";
+
+        let control = "";
+
+        if (field.type === "select") {
+            control = `
+                <select id="${field.id}" ${required}>
+                    ${(field.options || []).map(opt => `
+                        <option value="${escapeHtml(opt.value)}" ${String(opt.value) === String(value) ? "selected" : ""}>
+                            ${escapeHtml(opt.label)}
+                        </option>
+                    `).join("")}
+                </select>
+            `;
+        } else {
+            control = `
+                <input
+                    id="${field.id}"
+                    type="${field.type || "text"}"
+                    value="${escapeHtml(value)}"
+                    ${required}
+                    ${min}
+                    ${max}
+                    ${step}
+                    ${placeholder}
+                />
+            `;
+        }
+
+        return `
+            <div class="edit-modal-field${fullClass}">
+                <label for="${field.id}">${field.label}</label>
+                ${control}
+            </div>
+        `;
+    }).join("") + `<div class="edit-modal-error" id="edit-modal-error"></div>`;
+
+    form.onsubmit = async e => {
+        e.preventDefault();
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const errBox = document.getElementById("edit-modal-error");
+
+        errBox.innerText = "";
+        submitBtn.disabled = true;
+
+        const values = {};
+        fields.forEach(field => {
+            const el = document.getElementById(field.id);
+            values[field.id] = el ? el.value : "";
+        });
+
+        try {
+            await onSubmit(values, errBox);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    };
+
+    modal.classList.add("active");
+}
+
+function getZoneOptions() {
+    return allZonesCache
+        .slice()
+        .sort((a, b) => a.floor - b.floor || String(a.room).localeCompare(String(b.room)))
+        .map(z => ({
+            value: z.id,
+            label: `Tầng ${z.floor} - ${z.room}`
+        }));
+}
+
+function getDeviceOptions(type) {
+    return allDevicesCache
+        .filter(d => !type || String(d.type).toLowerCase() === type)
+        .map(d => ({
+            value: d.id,
+            label: `${d.name}${getZoneLabel(d.zone_id) ? " · " + getZoneLabel(d.zone_id) : ""}`
+        }));
+}
+
+function normalizeDateInput(value) {
+    if (!value) return "";
+    return String(value).slice(0, 10);
+}
+
+function normalizeTimeInput(value) {
+    if (!value) return "";
+    return String(value).slice(0, 5);
+}
+
+async function initSettingDevice(settingId, deviceId, settingKind = "setting") {
+    const res = await fetch(`${API}/settings/${settingId}/apply/${deviceId}`, {
+        method: "POST",
+        headers: authHeaders()
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error(`initSettingDevice ${settingKind} failed:`, errText);
+        showToast(`Cập nhật ${settingKind} thành công nhưng gắn thiết bị thất bại`, "error");
+        return false;
+    }
+
+    return true;
+}
+
+// ============================================================
+// EDIT ZONE
+// Sửa được: floor, room
+// ============================================================
+async function editZone(zoneId) {
+    const zone = allZonesCache.find(z => z.id == zoneId);
+
+    if (!zone) {
+        showToast("Không tìm thấy khu vực", "error");
+        return;
+    }
+
+    openEditModal({
+        title: "Chỉnh sửa khu vực",
+
+        fields: [
+            {
+                id: "floor",
+                label: "Số tầng",
+                type: "number",
+                value: zone.floor,
+                min: 0,
+                required: true
+            },
+            {
+                id: "room",
+                label: "Tên phòng",
+                type: "text",
+                value: zone.room,
+                required: true
+            }
+        ],
+
+        onSubmit: async (values, errBox) => {
+            const payload = {
+                floor: Number(values.floor),
+                room: values.room.trim()
+            };
+
+            if (Number.isNaN(payload.floor) || payload.floor < 0 || !payload.room) {
+                errBox.innerText = "Tầng hoặc tên phòng không hợp lệ";
+                return;
+            }
+
+            const res = await fetch(`${API}/zones/${zoneId}`, {
+                method: "PUT",
+                headers: authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                errBox.innerText = await res.text();
+                return;
+            }
+
+            closeEditModal();
+            showToast("Đã cập nhật khu vực", "success");
+
+            await loadZones();
+            await loadDevices();
+        }
+    });
+}
+
+// ============================================================
+// EDIT DEVICE
+// Sửa được: name, feed_id, zone_id
+// Không sửa type vì BE update device không nhận type
+// ============================================================
+async function editDevice(deviceId) {
+    const device = allDevicesCache.find(d => d.id == deviceId);
+
+    if (!device) {
+        showToast("Không tìm thấy thiết bị", "error");
+        return;
+    }
+
+    if (!allZonesCache.length) {
+        await loadZones();
+    }
+
+    openEditModal({
+        title: "Chỉnh sửa thiết bị",
+
+        fields: [
+            {
+                id: "name",
+                label: "Tên thiết bị",
+                type: "text",
+                value: device.name,
+                required: true
+            },
+            {
+                id: "feed_id",
+                label: "Feed ID",
+                type: "text",
+                value: device.feed_id,
+                required: true
+            },
+            {
+                id: "zone_id",
+                label: "Khu vực",
+                type: "select",
+                value: device.zone_id,
+                required: true,
+                options: getZoneOptions(),
+                full: true
+            }
+        ],
+
+        onSubmit: async (values, errBox) => {
+            const payload = {
+                name: values.name.trim(),
+                feed_id: values.feed_id.trim(),
+                zone_id: Number(values.zone_id)
+            };
+
+            if (!payload.name || !payload.feed_id || !payload.zone_id) {
+                errBox.innerText = "Tên thiết bị, feed ID hoặc khu vực không hợp lệ";
+                return;
+            }
+
+            const res = await fetch(`${API}/devices/${deviceId}`, {
+                method: "PUT",
+                headers: authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                errBox.innerText = await res.text();
+                return;
+            }
+
+            closeEditModal();
+            showToast("Đã cập nhật thiết bị", "success");
+
+            await loadDevices();
+            await loadThresholdDevices();
+            await loadScheduleDevices();
+        }
+    });
+}
+
+// ============================================================
+// EDIT THRESHOLD
+// Sửa được:
+// name, sensor áp dụng, target device, value, condition, action
+// ============================================================
+async function editThreshold(settingId) {
+    let item = allThresholdsCache.find(t => (t.setting_id || t.id) == settingId);
+
+    if (!item) {
+        try {
+            const res = await fetch(`${API}/settings/thresholds/${settingId}`, {
+                method: "GET",
+                headers: authHeaders()
+            });
+
+            if (res.ok) {
+                item = await res.json();
+            }
+        } catch (_) {}
+    }
+
+    if (!item) {
+        showToast("Không tìm thấy ngưỡng", "error");
+        return;
+    }
+
+    if (!allDevicesCache.length) {
+        await loadDevices();
+    }
+
+    const oldSensorId =
+        item.sensor_id ||
+        item.device_id ||
+        thresholdSensorMap[settingId] ||
+        "";
+
+    const oldTargetId =
+        item.target_device_id ||
+        thresholdTargetMap[settingId] ||
+        "";
+
+    openEditModal({
+        title: "Chỉnh sửa ngưỡng tự động",
+
+        fields: [
+            {
+                id: "name",
+                label: "Tên setting",
+                type: "text",
+                value: item.name,
+                required: true,
+                full: true
+            },
+            {
+                id: "sensor_id",
+                label: "Cảm biến áp dụng",
+                type: "select",
+                value: oldSensorId,
+                required: true,
+                options: getDeviceOptions("sensor")
+            },
+            {
+                id: "target_device_id",
+                label: "Thiết bị phản ứng",
+                type: "select",
+                value: oldTargetId,
+                required: true,
+                options: getDeviceOptions("controller")
+            },
+            {
+                id: "value",
+                label: "Giá trị ngưỡng",
+                type: "number",
+                value: item.value,
+                step: "0.1",
+                required: true
+            },
+            {
+                id: "condition",
+                label: "Điều kiện",
+                type: "select",
+                value: String(Boolean(item.condition)),
+                required: true,
+                options: [
+                    { value: "true", label: "Lớn hơn hoặc bằng" },
+                    { value: "false", label: "Nhỏ hơn hoặc bằng" }
+                ]
+            },
+            {
+                id: "action",
+                label: "Hành động",
+                type: "select",
+                value: String(item.action || "ON").toUpperCase(),
+                required: true,
+                options: [
+                    { value: "ON", label: "Bật" },
+                    { value: "OFF", label: "Tắt" }
+                ]
+            }
+        ],
+
+        onSubmit: async (values, errBox) => {
+            const sensorId = Number(values.sensor_id);
+
+            const payload = {
+                name: values.name.trim(),
+                action: values.action,
+                value: Number(values.value),
+                condition: values.condition === "true",
+                target_device_id: Number(values.target_device_id),
+                type: "threshold"
+            };
+
+            if (
+                !payload.name ||
+                Number.isNaN(payload.value) ||
+                !sensorId ||
+                !payload.target_device_id
+            ) {
+                errBox.innerText = "Thông tin ngưỡng không hợp lệ";
+                return;
+            }
+
+            const res = await fetch(`${API}/settings/thresholds/${settingId}`, {
+                method: "PUT",
+                headers: authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                errBox.innerText = await res.text();
+                return;
+            }
+
+            const ok = await initSettingDevice(settingId, sensorId, "threshold");
+            if (!ok) return;
+
+            thresholdSensorMap[settingId] = sensorId;
+            thresholdTargetMap[settingId] = payload.target_device_id;
+
+            localStorage.setItem("thresholdSensorMap", JSON.stringify(thresholdSensorMap));
+            localStorage.setItem("thresholdTargetMap", JSON.stringify(thresholdTargetMap));
+
+            closeEditModal();
+            showToast("Đã cập nhật ngưỡng", "success");
+
+            await loadThresholdsCache();
+            await loadThresholds();
+            await loadDevices();
+        }
+    });
+}
+
+// ============================================================
+// EDIT SCHEDULE
+// Sửa được:
+// name, device áp dụng, date_start, date_end, time_start, timer, action
+// ============================================================
+async function editSchedule(settingId) {
+    let item = null;
+
+    try {
+        const res = await fetch(`${API}/settings/schedules/${settingId}`, {
+            method: "GET",
+            headers: authHeaders()
+        });
+
+        if (res.ok) {
+            item = await res.json();
+        }
+    } catch (err) {
+        console.warn("Không lấy được schedule chi tiết:", err);
+    }
+
+    if (!item) {
+        showToast("Không tìm thấy lịch", "error");
+        return;
+    }
+
+    if (!allDevicesCache.length) {
+        await loadDevices();
+    }
+
+    const oldDeviceId =
+        item.target_device_id ||
+        item.device_id ||
+        scheduleDeviceMap[settingId] ||
+        "";
+
+    openEditModal({
+        title: "Chỉnh sửa lịch hẹn giờ",
+
+        fields: [
+            {
+                id: "name",
+                label: "Tên setting",
+                type: "text",
+                value: item.name,
+                required: true,
+                full: true
+            },
+            {
+                id: "device_id",
+                label: "Thiết bị áp dụng",
+                type: "select",
+                value: oldDeviceId,
+                required: true,
+                options: getDeviceOptions("controller"),
+                full: true
+            },
+            {
+                id: "date_start",
+                label: "Ngày bắt đầu",
+                type: "date",
+                value: normalizeDateInput(item.date_start) || new Date().toISOString().slice(0, 10),
+                required: true
+            },
+            {
+                id: "date_end",
+                label: "Ngày kết thúc",
+                type: "date",
+                value: normalizeDateInput(item.date_end),
+                placeholder: "Để trống nếu không có"
+            },
+            {
+                id: "time_start",
+                label: "Giờ bắt đầu",
+                type: "time",
+                value: normalizeTimeInput(item.time_start),
+                required: true
+            },
+            {
+                id: "timer",
+                label: "Timer / thời lượng phút",
+                type: "number",
+                value: item.timer ?? "",
+                min: 1,
+                placeholder: "VD: 30"
+            },
+            {
+                id: "action",
+                label: "Hành động bắt đầu",
+                type: "select",
+                value: String(item.action || "ON").toUpperCase(),
+                required: true,
+                options: [
+                    { value: "ON", label: "Bật" },
+                    { value: "OFF", label: "Tắt" }
+                ]
+            }
+        ],
+
+        onSubmit: async (values, errBox) => {
+            const deviceId = Number(values.device_id);
+
+            const payload = {
+                name: values.name.trim(),
+                action: values.action,
+                date_start: values.date_start,
+                date_end: values.date_end || null,
+                time_start: values.time_start.length === 5
+                    ? values.time_start + ":00"
+                    : values.time_start,
+                timer: values.timer ? Number(values.timer) : null,
+                type: "schedule"
+            };
+
+            if (
+                !payload.name ||
+                !deviceId ||
+                !payload.date_start ||
+                !payload.time_start ||
+                !["ON", "OFF"].includes(payload.action)
+            ) {
+                errBox.innerText = "Thông tin lịch không hợp lệ";
+                return;
+            }
+
+            if (payload.date_end && payload.date_end < payload.date_start) {
+                errBox.innerText = "Ngày kết thúc không được nhỏ hơn ngày bắt đầu";
+                return;
+            }
+
+            if (payload.timer !== null && (Number.isNaN(payload.timer) || payload.timer <= 0)) {
+                errBox.innerText = "Timer phải là số phút lớn hơn 0";
+                return;
+            }
+
+            const res = await fetch(`${API}/settings/schedules/${settingId}`, {
+                method: "PUT",
+                headers: authHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                errBox.innerText = await res.text();
+                return;
+            }
+
+            const ok = await initSettingDevice(settingId, deviceId, "schedule");
+            if (!ok) return;
+
+            saveScheduleDeviceMap(settingId, deviceId);
+
+            closeEditModal();
+            showToast("Đã cập nhật lịch", "success");
+
+            await loadSchedules();
+        }
+    });
+}
+// ============================================================
 // INIT
 // ============================================================
 window.addEventListener("load", async () => {
@@ -2270,6 +3084,11 @@ window.addEventListener("load", async () => {
     loadReportChart();
     loadReportSummary();
     await loadDevices();
+
+    const scheduleDateStartInput = document.getElementById("schedule-date-start");
+    if (scheduleDateStartInput && !scheduleDateStartInput.value) {
+        scheduleDateStartInput.value = new Date().toISOString().slice(0, 10);
+    }
 
     // Sau khi devices đã load → scheduler + logs + members
     fetchLogs();

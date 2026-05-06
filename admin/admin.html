@@ -133,6 +133,11 @@
                         <!-- Form tạo ngưỡng -->
                         <div class="card threshold-form-card">
                             <div class="form-grid">
+                                
+                                <div class="form-group">
+                                    <label>Tên setting</label>
+                                    <input type="text" id="threshold-name" placeholder="VD: Bật quạt khi nhiệt độ cao" />
+                                </div>
 
                                 <div class="form-group">
                                     <label>Chọn Cảm biến</label>
@@ -189,18 +194,20 @@
                             <div class="table-container">
                                 <table class="log-table">
                                     <thead>
-                                        <tr>
+                                       <tr>
+                                            <th>Tên setting</th>
                                             <th>Cảm biến</th>
                                             <th>Điều kiện</th>
                                             <th>Thiết bị phản ứng</th>
                                             <th>Hành động</th>
+                                            <th>Sửa</th>
                                             <th>Xóa</th>
                                         </tr>
                                     </thead>
 
                                     <tbody id="threshold-table-body">
                                         <tr>
-                                            <td colspan="5">Đang tải dữ liệu...</td>
+                                            <td colspan="7">Đang tải dữ liệu...</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -215,11 +222,31 @@
                   <div class="card threshold-form-card">
                       <h3><i class="fas fa-plus-circle"></i> Thêm lịch hẹn giờ</h3>
                       <div class="form-grid">
+
+                          <div class="form-group">
+                            <label><i class="fas fa-tag"></i> Tên setting</label>
+                            <input type="text" id="schedule-name" placeholder="VD: Bật đèn buổi tối" />
+                          </div>
+
                           <div class="form-group">
                               <label><i class="fas fa-plug"></i> Chọn thiết bị</label>
                               <select id="schedule-device">
                                   <option value="">-- Đang tải controller --</option>
                               </select>
+                          </div>
+                          <div class="form-group">
+                               <label><i class="fas fa-calendar-day"></i> Ngày bắt đầu</label>
+                               <input type="date" id="schedule-date-start" />
+                          </div>
+                            
+                          <div class="form-group">
+                               <label><i class="fas fa-calendar-check"></i> Ngày kết thúc</label>
+                               <input type="date" id="schedule-date-end" />
+                          </div>
+                            
+                          <div class="form-group">
+                               <label><i class="fas fa-hourglass-half"></i> Thời lượng phút</label>
+                               <input type="number" id="schedule-timer" min="1" placeholder="VD: 30, 60, 120" />
                           </div>
                           <div class="form-group">
                               <label><i class="fas fa-clock"></i> Thời gian</label>
@@ -246,17 +273,22 @@
                       <div class="table-container">
                           <table class="log-table">
                               <thead>
-                                  <tr>
-                                      <th>Thiết bị</th>
-                                      <th>Thời gian</th>
-                                      <th>Hành động</th>
-                                      <th>Trạng thái</th>
-                                      <th>Xóa</th>
-                                  </tr>
+                                <tr>
+                                    <th>Tên setting</th>
+                                    <th>Thiết bị</th>
+                                    <th>Ngày bắt đầu</th>
+                                    <th>Ngày kết thúc</th>
+                                    <th>Giờ</th>
+                                    <th>Thời lượng</th>
+                                    <th>Hành động</th>
+                                    <th>Trạng thái</th>
+                                    <th>Sửa</th>
+                                    <th>Xóa</th>
+                                </tr>
                               </thead>
                               <tbody id="schedule-table-body">
                                   <tr>
-                                      <td colspan="5">Đang tải dữ liệu...</td>
+                                      <td colspan="10">Đang tải dữ liệu...</td>
                                   </tr>
                               </tbody>
                           </table>
@@ -434,13 +466,17 @@
                                         <th>Tên</th>
                                         <th>Loại</th>
                                         <th>Hành động</th>
+                                        <th>Ngày bắt đầu</th>
+                                        <th>Ngày kết thúc</th>
+                                        <th>Giờ chạy</th>
+                                        <th>Thời lượng</th>
                                         <th>Số lần kích hoạt</th>
                                         <th>Thiết bị áp dụng</th>
                                     </tr>
                                 </thead>
                                 <tbody id="report-automation-table">
                                     <tr>
-                                        <td colspan="5">Đang tải dữ liệu...</td>
+                                        <td colspan="9">Đang tải dữ liệu...</td>
                                     </tr>
                                 </tbody>
                             </table>
