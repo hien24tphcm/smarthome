@@ -2144,110 +2144,181 @@ async function deleteMember(userId, userName = "") {
 /**
  * exportLogsToPDF(): 
  */
-function exportLogsToPDF() {
-    const { jsPDF } = window.jspdf;
-    if (!jsPDF) {
-        showToast("Thư viện jsPDF chưa tải xong", "error");
+async function exportLogsToPDF() {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        showToast("Thư viện jsPDF chưa tải được", "error");
         return;
     }
 
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    if (typeof html2canvas !== "function") {
+        showToast("Thư viện html2canvas chưa tải được", "error");
+        return;
+    }
 
-    // Header
-    doc.setFillColor(11, 18, 32);
-    doc.rect(0, 0, 297, 35, "F");
-
-    doc.setTextColor(56, 189, 248);
-    doc.setFontSize(20);
-    doc.setFont("helvetica", "bold");
-    doc.text("SMARTHOME", 14, 16);
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13);
-    doc.text("Bao cao Nhat ky Hoat dong", 14, 26);
-
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    const now = new Date();
-    doc.text(
-        `Xuat luc: ${now.toLocaleString("vi-VN")}`,
-        283, 16, { align: "right" }
-    );
-    doc.text(
-        `Nguoi xuat: Admin`,
-        283, 23, { align: "right" }
-    );
-
-    // Lấy dữ liệu từ bảng HTML
     const table = document.querySelector("#page-history .log-table");
+
     if (!table) {
         showToast("Không tìm thấy bảng nhật ký", "error");
         return;
     }
 
-    const headers = [];
-    table.querySelectorAll("thead th").forEach(th => {
-        headers.push(th.innerText.trim());
-    });
-
-    const rows = [];
-    table.querySelectorAll("tbody tr").forEach(tr => {
-        const cells = [];
-        tr.querySelectorAll("td").forEach(td => {
-            cells.push(td.innerText.trim());
-        });
-        if (cells.length === headers.length) {
-            rows.push(cells);
-        }
-    });
+    const rows = table.querySelectorAll("tbody tr");
 
     if (!rows.length) {
-        showToast("Bảng nhật ký đang trống", "error");
+        showToast("Chưa có dữ liệu nhật ký để xuất PDF", "error");
         return;
     }
 
-    doc.autoTable({
-        head: [headers],
-        body: rows,
-        startY: 40,
-        theme: "grid",
-        headStyles: {
-            fillColor: [30, 41, 59],
-            textColor: [56, 189, 248],
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "left"
-        },
-        bodyStyles: {
-            fillColor: [15, 23, 42],
-            textColor: [203, 213, 225],
-            fontSize: 8.5,
-            cellPadding: 4
-        },
-        alternateRowStyles: {
-            fillColor: [26, 37, 64]
-        },
-        styles: {
-            lineColor: [56, 189, 248],
-            lineWidth: 0.15,
-            overflow: "linebreak"
-        },
-        margin: { left: 14, right: 14 },
-        didDrawPage: (data) => {
-            // Footer mỗi trang
-            const pageCount = doc.internal.getNumberOfPages();
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184);
-            doc.text(
-                `Trang ${data.pageNumber} / ${pageCount}`,
-                283, 200, { align: "right" }
-            );
-            doc.text("SmartHome Admin System", 14, 200);
-        }
+    const now = new Date();
+
+    // Tạo khung riêng để xuất PDF, không ảnh hưởng giao diện đang hiển thị
+    const exportBox = document.createElement("div");
+
+    exportBox.style.position = "fixed";
+    exportBox.style.left = "-99999px";
+    exportBox.style.top = "0";
+    exportBox.style.width = "1200px";
+    exportBox.style.padding = "28px";
+    exportBox.style.background = "#0f172a";
+    exportBox.style.color = "#e5e7eb";
+    exportBox.style.fontFamily = "Arial, Helvetica, sans-serif";
+
+    exportBox.innerHTML = `
+        <div style="
+            background:#020617;
+            border:1px solid rgba(56,189,248,.35);
+            border-radius:18px;
+            padding:24px;
+        ">
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                margin-bottom:22px;
+                border-bottom:1px solid rgba(148,163,184,.25);
+                padding-bottom:16px;
+            ">
+                <div>
+                    <div style="
+                        color:#38bdf8;
+                        font-size:30px;
+                        font-weight:800;
+                        letter-spacing:1px;
+                    ">
+                        SMARTHOME
+                    </div>
+
+                    <div style="
+                        color:#ffffff;
+                        font-size:20px;
+                        font-weight:700;
+                        margin-top:6px;
+                    ">
+                        Báo cáo Nhật ký Hoạt động
+                    </div>
+                </div>
+
+                <div style="
+                    text-align:right;
+                    color:#cbd5e1;
+                    font-size:14px;
+                    line-height:1.8;
+                ">
+                    <div><b>Xuất lúc:</b> ${now.toLocaleString("vi-VN")}</div>
+                    <div><b>Người xuất:</b> Admin</div>
+                </div>
+            </div>
+
+            ${table.outerHTML}
+
+            <div style="
+                margin-top:18px;
+                color:#94a3b8;
+                font-size:13px;
+                display:flex;
+                justify-content:space-between;
+            ">
+                <span>SmartHome Admin System</span>
+                <span>Trang 1</span>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(exportBox);
+
+    // Style lại bảng trong khung export
+    const exportTable = exportBox.querySelector("table");
+
+    exportTable.style.width = "100%";
+    exportTable.style.borderCollapse = "collapse";
+    exportTable.style.fontSize = "13px";
+    exportTable.style.color = "#e5e7eb";
+
+    exportTable.querySelectorAll("th").forEach(th => {
+        th.style.background = "#1e293b";
+        th.style.color = "#38bdf8";
+        th.style.padding = "12px";
+        th.style.border = "1px solid rgba(56,189,248,.3)";
+        th.style.textAlign = "left";
+        th.style.fontWeight = "700";
     });
 
-    doc.save(`SmartHome_NhatKy_${now.toISOString().slice(0, 10)}.pdf`);
-    showToast("Da xuat file PDF thanh cong!", "success");
+    exportTable.querySelectorAll("td").forEach(td => {
+        td.style.background = "#0f172a";
+        td.style.color = "#e5e7eb";
+        td.style.padding = "10px 12px";
+        td.style.border = "1px solid rgba(56,189,248,.18)";
+        td.style.verticalAlign = "top";
+    });
+
+    try {
+        showToast("Đang xuất PDF...", "info");
+
+        const canvas = await html2canvas(exportBox, {
+            scale: 2,
+            backgroundColor: "#0f172a",
+            useCORS: true
+        });
+
+        const imgData = canvas.toDataURL("image/png");
+
+        const { jsPDF } = window.jspdf;
+
+        const pdf = new jsPDF({
+            orientation: "landscape",
+            unit: "mm",
+            format: "a4"
+        });
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        const imgWidth = pageWidth;
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save(`SmartHome_NhatKy_${now.toISOString().slice(0, 10)}.pdf`);
+
+        showToast("Đã xuất file PDF thành công!", "success");
+
+    } catch (err) {
+        console.error("exportLogsToPDF error:", err);
+        showToast("Không thể xuất PDF", "error");
+    } finally {
+        exportBox.remove();
+    }
 }
 
 // ============================================================
@@ -3056,6 +3127,8 @@ async function editThreshold(settingId) {
 
 // ============================================================
 // EDIT SCHEDULE
+// Sửa được:
+// name, device áp dụng, date_start, date_end, time_start, timer, action
 // ============================================================
 async function editSchedule(settingId) {
     let item = null;
