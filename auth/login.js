@@ -83,7 +83,6 @@ if (loginForm) {
         }
     });
 }
-
 // ----------------------------------------------------
 // XỬ LÝ ĐĂNG KÝ (SIGN UP)
 // ----------------------------------------------------
@@ -97,12 +96,13 @@ if (signupForm) {
 
         // 1. Lấy dữ liệu từ form
         const role = document.getElementById('member-role').value;
+        const email = document.getElementById('member-email').value;
         const payload = {
-            fname: document.getElementById('member-fname').value, // Đổi từ first_name -> fname
-            lname: document.getElementById('member-lname').value, // Đổi từ last_name -> lname
-            email: document.getElementById('member-email').value,
+            fname: document.getElementById('member-fname').value,
+            lname: document.getElementById('member-lname').value,
+            email: email,
             password: document.getElementById('member-password').value,
-            type: role                                            // Đổi từ role -> type
+            type: role 
         };
 
         // Gắn thêm thông tin nhà tùy theo Role
@@ -111,7 +111,9 @@ if (signupForm) {
         } else {
             payload.home_id = parseInt(document.getElementById('member-home-id').value);
         }
-        // 
+
+        let isSuccess = false;
+        let userData = null;
 
         try {
             // 2. GỌI API TẠO TÀI KHOẢN
@@ -121,30 +123,96 @@ if (signupForm) {
                 body: JSON.stringify(payload)
             });
 
-            const createData = await resCreate.json();
+            const text = await resCreate.text();
+            let createData = null;
+            try { 
+                createData = text ? JSON.parse(text) : null; 
+            } catch (_) {}
 
-            if (!resCreate.ok) {
-                errorMsg.innerText = createData.detail || "Có lỗi xảy ra khi tạo tài khoản!";
+            if (resCreate.ok) {
+                isSuccess = true;
+            } else {
+                // WORKAROUND: Xử lý lỗi 500 (response_model error) từ Backend
+                console.warn("POST /users/ không OK:", resCreate.status, text);
+                
+                // Thử xác minh xem user đã thực sự được tạo trong DB chưa
+                const verifyRes = await fetch(`${BASE_URL}/users/${encodeURIComponent(email)}`);
+                if (verifyRes.ok) {
+                    const checkData = await verifyRes.json();
+                    if (checkData && checkData.email) {
+                        isSuccess = true;
+                        userData = checkData; // Lưu luôn data để bước sau khỏi gọi lại
+                    }
+                }
+
+                // Nếu xác minh vẫn thất bại thì báo lỗi
+                if (!isSuccess) {
+                    let msg = "Có lỗi xảy ra khi tạo tài khoản!";
+                    if (createData && createData.detail) {
+                        msg = createData.detail;
+                    } else if (resCreate.status === 500) {
+                        msg = "Backend lỗi 500. User chưa được tạo hoặc lỗi định dạng trả về.";
+                    } else if (resCreate.status === 422) {
+                        msg = "Dữ liệu gửi lên không đúng định dạng.";
+                    }
+
+                    errorMsg.innerText = msg;
+                    errorMsg.style.display = 'block';
+                    return;
+                }
+            }
+
+        } catch (err) {
+            console.error("Lỗi POST create user:", err);
+            
+            // WORKAROUND: Cho trường hợp rớt mạng / lỗi CORS do BE crash
+            try {
+                const verifyRes = await fetch(`${BASE_URL}/users/${encodeURIComponent(email)}`);
+                if (verifyRes.ok) {
+                    const checkData = await verifyRes.json();
+                    if (checkData && checkData.email) {
+                        isSuccess = true;
+                        userData = checkData;
+                    }
+                }
+            } catch (verifyErr) {
+                console.error("Lỗi verify user:", verifyErr);
+            }
+
+            if (!isSuccess) {
+                errorMsg.innerText = "Không thể kết nối đến máy chủ. Vui lòng thử lại!";
                 errorMsg.style.display = 'block';
                 return;
             }
+        }
 
-            // 3. NẾU THÀNH CÔNG, GỌI API GET ĐỂ LẤY THÔNG TIN THEO EMAIL
-            const emailToFetch = payload.email;
-            const resUser = await fetch(`${BASE_URL}/users/${emailToFetch}`);
-            const userData = await resUser.json();
+        // 3. NẾU ĐĂNG KÝ THÀNH CÔNG (hoặc được xác nhận qua Workaround)
+        if (isSuccess) {
+            try {
+                // Nếu userData chưa được lấy qua workaround thì fetch lại
+                if (!userData) {
+                    const resUser = await fetch(`${BASE_URL}/users/${encodeURIComponent(email)}`);
+                    if (resUser.ok) {
+                        userData = await resUser.json();
+                    } else {
+                        errorMsg.innerText = "Tạo thành công nhưng không thể lấy thông tin chi tiết.";
+                        errorMsg.style.display = 'block';
+                        return;
+                    }
+                }
 
-            if (resUser.ok) {
                 // 4. HIỂN THỊ THÔNG TIN LÊN MÀN HÌNH MỚI
                 document.getElementById('signup-form').style.display = 'none';
                 document.getElementById('user-info-display').style.display = 'block';
                 document.getElementById('prompt-text').innerText = "Thông tin tài khoản";
 
                 const detailBox = document.getElementById('user-details-content');
+                
+                // Lưu ý: Sửa thành userData.lname và userData.fname cho khớp với payload Backend
                 detailBox.innerHTML = `
-                    <p><strong>Họ & Tên:</strong> ${userData.last_name || ""} ${userData.first_name || ""}</p>
+                    <p><strong>Họ & Tên:</strong> ${userData.lname || ""} ${userData.fname || ""}</p>
                     <p><strong>Email:</strong> ${userData.email}</p>
-                    <p><strong>Vai trò:</strong> <span style="text-transform: capitalize;">${userData.type}</span></p>
+                    <p><strong>Vai trò:</strong> <span style="text-transform: capitalize;">${userData.type || role}</span></p>
                     ${userData.home_id ? `<p><strong>ID Nhà:</strong> ${userData.home_id}</p>` : ''}
                     <p style="margin-top:10px; font-size:12px; color:#666;">
                         <i>Vui lòng quay lại trang Đăng nhập để truy cập hệ thống.</i>
@@ -153,15 +221,11 @@ if (signupForm) {
                 
                 // Xóa dữ liệu cũ trên form
                 signupForm.reset(); 
-            } else {
-                errorMsg.innerText = "Tạo thành công nhưng không thể lấy thông tin chi tiết.";
+            } catch (err) {
+                console.error("Lỗi render UI:", err);
+                errorMsg.innerText = "Tạo thành công nhưng có lỗi khi hiển thị thông tin.";
                 errorMsg.style.display = 'block';
             }
-
-        } catch (err) {
-            console.error(err);
-            errorMsg.innerText = "Không thể kết nối đến máy chủ. Vui lòng thử lại!";
-            errorMsg.style.display = 'block';
         }
     });
 }
