@@ -79,7 +79,7 @@ function showToast(message, type = "info") {
     }, 3200);
 }
 
-/**  icon + đơn vị  */
+/** icon + đơn vị  */
 function detectSensorMeta(device) {
     const key = (device.name + " " + device.feed_id).toLowerCase();
 
@@ -877,9 +877,16 @@ async function saveThreshold() {
         }
 
         const createdThreshold = await res.json();
-        const settingId = createdThreshold.setting_id || createdThreshold.id;
+        console.log("[DEBUG] Kết quả trả về sau khi tạo Ngưỡng:", createdThreshold);
+        
+        // Quét tìm ID từ nhiều cấu trúc JSON có thể có
+        const settingId = 
+            createdThreshold.setting_id || 
+            createdThreshold.id || 
+            (createdThreshold.data && createdThreshold.data.id) || 
+            (createdThreshold.data && createdThreshold.data.setting_id);
 
-        const ok = await initSettingDevice(settingId, sensorId, "threshold");
+        const ok = await initSettingDevice(settingId, sensorId, targetDeviceId, "threshold");
         if (!ok) return;
 
         thresholdSensorMap[settingId] = Number(sensorId);
@@ -920,7 +927,11 @@ async function loadThresholds() {
         });
 
         if (!res.ok) {
-            tbody.innerHTML = `<tr><td colspan="7">Chưa có dữ liệu</td></tr>`;
+            if (res.status === 404) {
+                tbody.innerHTML = `<tr><td colspan="7">Chưa có ngưỡng nào</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = `<tr><td colspan="7">Lỗi tải dữ liệu</td></tr>`;
             return;
         }
 
@@ -1038,6 +1049,8 @@ async function loadThresholdsCache() {
 
         if (res.ok) {
             allThresholdsCache = await res.json();
+        } else if (res.status === 404) {
+            allThresholdsCache = [];
         } else {
             console.warn("loadThresholdsCache failed:", res.status);
             allThresholdsCache = [];
@@ -1171,6 +1184,14 @@ async function loadReportChart() {
         });
 
         if (!res.ok) {
+            if (res.status === 404) {
+                canvas.parentElement.innerHTML =
+                    `<div class="empty-state">
+                        <i class="fas fa-chart-line"></i>
+                        Chưa có thiết bị nào để hiển thị biểu đồ
+                    </div>`;
+                return;
+            }
             console.error("Không lấy được devices");
             return;
         }
@@ -1568,9 +1589,15 @@ async function saveSchedule() {
         }
 
         const created = await res.json();
-        const settingId = created.setting_id || created.id;
+        console.log("[DEBUG] Kết quả trả về sau khi tạo Lịch:", created);
 
-        const ok = await initSettingDevice(settingId, deviceId, "schedule");
+        const settingId = 
+            created.setting_id || 
+            created.id || 
+            (created.data && created.data.id) || 
+            (created.data && created.data.setting_id);
+
+        const ok = await initSettingDevice(settingId, deviceId, deviceId, "schedule");
         if (!ok) return;
 
         saveScheduleDeviceMap(settingId, deviceId);
@@ -1614,8 +1641,19 @@ async function loadSchedules() {
         });
 
         if (!res.ok) {
+            if (res.status === 404) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="empty-state">
+                            <i class="fas fa-clock"></i>
+                            Chưa có lịch hẹn giờ nào
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
             tbody.innerHTML = `
-                <tr><td colspan="10">Chưa có dữ liệu</td></tr>
+                <tr><td colspan="10">Lỗi tải dữ liệu</td></tr>
             `;
             return;
         }
@@ -2813,8 +2851,22 @@ function normalizeTimeInput(value) {
     return String(value).slice(0, 5);
 }
 
-async function initSettingDevice(settingId, deviceId, settingKind = "setting") {
-    const res = await fetch(`${API}/settings/${settingId}/apply/${deviceId}`, {
+// -------------------------------------------------------------
+// ĐÃ SỬA: Hàm initSettingDevice (Thêm bộ bắt lỗi chi tiết)
+// -------------------------------------------------------------
+async function initSettingDevice(settingId, deviceId, targetDeviceId = null, settingKind = "setting") {
+    // Thử đổi URL theo kiểu Path Parameter (nếu Backend khai báo route kiểu đó)
+    // Nếu API trong /docs hiển thị là /settings/{setting_id}/apply/{device_id}/{target_device_id}
+    // thì bạn phải gọi như sau:
+    let url = `${API}/settings/${settingId}/apply/${deviceId}`;
+    
+    if (targetDeviceId) {
+        url += `/${targetDeviceId}`; // Thay vì ?target_device_id=...
+    }
+
+    console.log(`[DEBUG] Gọi URL Path Param: ${url}`);
+    
+    const res = await fetch(url, {
         method: "POST",
         headers: authHeaders()
     });
@@ -2822,7 +2874,7 @@ async function initSettingDevice(settingId, deviceId, settingKind = "setting") {
     if (!res.ok) {
         const errText = await res.text();
         console.error(`initSettingDevice ${settingKind} failed:`, errText);
-        showToast(`Cập nhật ${settingKind} thành công nhưng gắn thiết bị thất bại`, "error");
+        showToast(`Cập nhật ${settingKind} thành công nhưng gắn thiết bị thất bại (Lỗi ${res.status})`, "error");
         return false;
     }
 
@@ -3106,7 +3158,10 @@ async function editThreshold(settingId) {
                 return;
             }
 
-            const ok = await initSettingDevice(settingId, sensorId, "threshold");
+            // -------------------------------------------------------------
+            // ĐÃ SỬA: Edit Threshold
+            // -------------------------------------------------------------
+            const ok = await initSettingDevice(settingId, sensorId, payload.target_device_id, "threshold");
             if (!ok) return;
 
             thresholdSensorMap[settingId] = sensorId;
@@ -3271,7 +3326,10 @@ async function editSchedule(settingId) {
                 return;
             }
 
-            const ok = await initSettingDevice(settingId, deviceId, "schedule");
+            // -------------------------------------------------------------
+            // ĐÃ SỬA: Edit Schedule
+            // -------------------------------------------------------------
+            const ok = await initSettingDevice(settingId, deviceId, deviceId, "schedule");
             if (!ok) return;
 
             saveScheduleDeviceMap(settingId, deviceId);
@@ -3314,5 +3372,3 @@ setInterval(loadDevices, POLL_INTERVAL_MS);
 setInterval(loadReportChart, 10000);
 setInterval(loadReportSummary, 30000);
 setInterval(loadThresholdsCache, 30000);
-
-
