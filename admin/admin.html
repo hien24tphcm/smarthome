@@ -298,42 +298,62 @@
               </section>
 
               <section id="page-history" class="page">
-                    <div class="section-header-row">
-                        <h2><i class="fas fa-history"></i> Nhật ký hoạt động</h2>
-                
-                        <div style="display:flex;gap:10px;">
+                <div class="section-header-row">
+                    <h2><i class="fas fa-history"></i> Nhật ký hoạt động</h2>
+            
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <select id="log-type-filter" class="floor-filter" onchange="applyLogFilters()">
+                            <option value="all">Tất cả hành động</option>
+                            <option value="on">Bật thiết bị</option>
+                            <option value="off">Tắt thiết bị</option>
+                            <option value="created">Tạo mới</option>
+                            <option value="updated">Cập nhật</option>
+                            <option value="deleted">Xóa</option>
+                            <option value="error">Lỗi</option>
+                        </select>
+            
+                        <input
+                            type="text"
+                            id="log-search"
+                            class="floor-filter"
+                            placeholder="Tìm theo ghi chú..."
+                            oninput="applyLogFilters()"
+                            style="min-width:220px;"
+                        />
+            
                         <button class="btn-secondary" onclick="fetchLogs()">
                             <i class="fas fa-rotate"></i> Làm mới
                         </button>
+            
                         <button class="btn-primary" onclick="exportLogsToPDF()">
                             <i class="fas fa-file-pdf"></i> Xuất PDF
                         </button>
                     </div>
-                    </div>
-                
-                    <div class="table-container modern-table">
-                        <table class="log-table">
-                            <thead>
-                                <tr>
-                                    <th>Thời gian</th>
-                                    <th>Tên thiết bị</th>
-                                    <th>Hành động</th>
-                                    <th>Trạng thái</th>
-                                    <th>Ghi chú</th>
-                                </tr>
-                            </thead>
-                
-                            <tbody id="log-table-body">
-                                <tr>
-                                    <td colspan="5" class="empty-state">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        Đang tải nhật ký hoạt động...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                </div>
+            
+                <div class="table-container modern-table">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Tên thiết bị</th>
+                                <th>Hành động</th>
+                                <th>Trạng thái</th>
+                                <th>Ghi chú</th>
+                            </tr>
+                        </thead>
+            
+                        <tbody id="log-table-body">
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    Đang tải nhật ký hoạt động...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
               <!-- ============== MEMBERS SECTION ============== -->
               <section id="page-members" class="page">
