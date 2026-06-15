@@ -1,6 +1,3 @@
-// ==========================================
-// 1. CẤU HÌNH VÀ KẾT NỐI BACKEND (API)
-// ==========================================
 const BASE_URL = "https://iot-smart-home-backend-production.up.railway.app/api/v1";
 
 function escapeHtml(str) {
@@ -135,19 +132,14 @@ const API = {
     }
 };
 
-// ==========================================
-// 2. XỬ LÝ GIAO DIỆN & SỰ KIỆN (DOM)
-// ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // --- XỬ LÝ SIDEBAR ---
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
     if (sidebarToggle && sidebar) {
         sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
     }
 
-    // --- LỜI CHÀO ---
     const greetingElement = document.getElementById('greeting-text');
     if (greetingElement) {
         const currentHour = new Date().getHours();
@@ -157,7 +149,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         else greetingElement.innerHTML = 'Chào buổi tối, 🌙';
     }
 
-    // --- THÔNG BÁO ---
     const notifBell = document.getElementById('notif-bell');
     const notifDropdown = document.getElementById('notif-dropdown');
     const notifList = document.getElementById('notif-list');
@@ -219,7 +210,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // --- TÀI KHOẢN ---
     async function loadHeaderInfo() {
         try {
             const token = localStorage.getItem('access_token');
@@ -364,7 +354,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) { displayBox.innerHTML = `<div style="text-align:center;"><i class="fa-solid fa-triangle-exclamation" style="font-size: 40px; color: var(--danger-color); margin-bottom: 15px;"></i><p style="color: var(--text-secondary);">Lỗi kết nối hoặc phiên đăng nhập đã hết hạn.</p></div>`; }
     }
 
-    // --- CÀI ĐẶT ---
     function formatSettingDate(dateStr) {
         if (!dateStr) return "--";
         const parts = dateStr.split('-');
@@ -497,9 +486,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const refreshSettingsBtn = document.getElementById('refresh-settings');
     if (refreshSettingsBtn) refreshSettingsBtn.addEventListener('click', loadSettingsPage);
 
-    // ==========================================
-    // DASHBOARD & QUẢN LÝ THIẾT BỊ
-    // ==========================================
     const checkIsOn = (status) => { 
         if (status === true || status === 1) return true; 
         const strStatus = String(status || '').toUpperCase(); 
@@ -525,7 +511,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (val <= 0)  return 0;  
         if (val <= 40) return 1;  
         if (val <= 70) return 2;  
-        return 3;                 
+        return 3;                
     }
 
     async function loadDashboard() {
@@ -538,14 +524,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         const zoneMap = new Map();
 
         if (zones && zones.length > 0 && filterBar) {
+            const floors = new Set(); 
+
             zones.forEach(zone => {
-                const fullZoneName = zone.floor !== undefined ? `Tầng ${zone.floor} - ${zone.room}` : zone.room;
-                zoneMap.set(zone.id, fullZoneName); 
+                let roomName = zone.room || zone.name || `Phòng ${zone.id}`;
+                let floorStr = '';
+                let displayRoomName = roomName;
                 
+                if (zone.floor !== undefined && zone.floor !== null && zone.floor !== '') {
+                    floorStr = String(zone.floor);
+                    floors.add(floorStr); 
+                    displayRoomName = `Tầng ${floorStr} - ${roomName}`;
+                }
+                zoneMap.set(zone.id, {
+                    displayName: displayRoomName,
+                    floor: floorStr
+                });
+            });
+            Array.from(floors).sort((a, b) => a - b).forEach(floor => {
                 const btn = document.createElement('button');
                 btn.className = 'filter-btn';
-                btn.dataset.filter = `room-${zone.id}`;
-                btn.innerText = fullZoneName; 
+                btn.dataset.filter = `Tầng-${floor}`; 
+                btn.innerText = `Tầng ${floor}`; 
                 filterBar.appendChild(btn);
             });
         }
@@ -561,17 +561,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (devices && devices.length > 0) {
             devices.forEach(device => {
-                const zoneName = zoneMap.get(device.zone_id) || `Phòng ID: ${device.zone_id}`;
+                const zoneData = zoneMap.get(device.zone_id) || { displayName: `Phòng ID: ${device.zone_id}`, floor: '' };
+                const displayRoomName = zoneData.displayName;
+                const filterKey = zoneData.floor !== '' ? `Tầng-${zoneData.floor}` : 'all';
 
                 if (device.type === 'controller') {
                     hasController = true;
                     const isFan = device.name.toLowerCase().includes('quạt') || (device.feed_id && device.feed_id.toLowerCase().includes('fan')) || device.mode !== undefined || device.speed !== undefined;
-                    if (isFan) renderFanCard(device, controllerContainer, zoneName); 
-                    else renderLightCard(device, controllerContainer, zoneName);
+                    
+                    if (isFan) renderFanCard(device, controllerContainer, displayRoomName, filterKey); 
+                    else renderLightCard(device, controllerContainer, displayRoomName, filterKey);
                 } else if (device.type === 'sensor') {
                     hasSensor = true;
-                    renderSensorCard(device, sensorContainer, zoneName); 
-                    renderSensorChart(device); 
+                    renderSensorCard(device, sensorContainer, displayRoomName, filterKey); 
+                    renderSensorChart(device, filterKey); 
                 }
             });
         }
@@ -588,12 +591,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         await refreshDeviceStates();
         setInterval(refreshDeviceStates, 7000); 
     }
-
-    function renderLightCard(device, container, zoneName) {
+    function renderLightCard(device, container, zoneName, filterKey) {
         if(!container) return;
         const card = document.createElement('div'); 
         card.className = 'ctrl-card widget-item';
-        card.setAttribute('data-room', `room-${device.zone_id}`); 
+        card.setAttribute('data-room', filterKey || 'all'); 
         card.setAttribute('data-device-id', device.id);
         
         const isOn = checkIsOn(device.status);
@@ -643,11 +645,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         container.appendChild(card);
     }
 
-    function renderFanCard(device, container, zoneName) {
+    function renderFanCard(device, container, zoneName, filterKey) {
         if(!container) return;
         const card = document.createElement('div'); 
         card.className = 'ctrl-card fan-card widget-item';
-        card.setAttribute('data-room', `room-${device.zone_id}`); 
+        card.setAttribute('data-room', filterKey || 'all'); 
         card.setAttribute('data-device-id', device.id);
         
         const isOn = checkIsOn(device.status); 
@@ -809,7 +811,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let state = {};
             try {
-                // Thử lấy API state, nếu lỗi (như trả về 404 cho quạt) thì nuốt lỗi và đi tiếp
                 state = await API.getDeviceState(device.id) || {};
             } catch (err) {
                 state = {}; 
@@ -841,7 +842,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         else iconEl.classList.remove('fan-spinning');
                     }
 
-                    // TỐC ĐỘ: Lấy từ state -> fallback device
                     let currentSpeed = state.speed !== undefined ? state.speed : device.speed;
                     if (currentSpeed !== undefined && currentSpeed !== null) {
                         const speedLv = getSpeedLevel(currentSpeed);
@@ -852,7 +852,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         else if (speedLv === 3) card.querySelector('.speed-btn[data-speed="100"]')?.classList.add('active');
                     }
                     
-                    // CHẾ ĐỘ (MODE): Lấy từ state -> fallback device -> fallback localStorage
                     let currentMode = "manual";
                     if (state.mode) {
                         currentMode = String(state.mode).toLowerCase().trim();
@@ -881,8 +880,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // --- RENDER SENSOR UI ---
-    async function renderSensorCard(device, container, zoneName) {
+    async function renderSensorCard(device, container, zoneName, filterKey) {
         if(!container) return;
         let val = 0; try { const state = await API.getDeviceState(device.id); val = state && state.sensor_value !== undefined ? state.sensor_value : 0; } catch (error) {}
         val = parseFloat(val); const isTemp = device.name.toLowerCase().includes('nhiệt');
@@ -904,7 +902,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const card = document.createElement('div'); card.className = `card room-status-card widget-item ${isAlert ? 'alert-border' : ''}`;
         if (isAlert) card.style.border = isTemp ? "1px solid var(--danger-color)" : "1px solid #4dacff";
-        card.setAttribute('data-room', `room-${device.zone_id}`); card.setAttribute('data-device-id', device.id);
+        card.setAttribute('data-room', filterKey || 'all'); card.setAttribute('data-device-id', device.id);
         
         const safeZoneName = zoneName ? escapeHtml(zoneName) : 'Chưa có khu vực';
 
@@ -925,9 +923,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         container.appendChild(card);
     }
 
-    async function renderSensorChart(device) {
+    async function renderSensorChart(device, filterKey) {
         if(!chartsContainer) return;
-        const chartWrapper = document.createElement('div'); chartWrapper.className = 'card widget-item'; chartWrapper.setAttribute('data-room', `room-${device.zone_id}`); chartWrapper.style = 'padding: 20px; background: var(--card-bg); border-radius: 12px; height: 100%;';
+        const chartWrapper = document.createElement('div'); chartWrapper.className = 'card widget-item'; chartWrapper.setAttribute('data-room', filterKey || 'all'); chartWrapper.style = 'padding: 20px; background: var(--card-bg); border-radius: 12px; height: 100%;';
         const isTemp = device.name.toLowerCase().includes('nhiệt'); const icon = isTemp ? '<i class="fa-solid fa-temperature-half" style="color: #ff6b6b;"></i>' : '<i class="fa-solid fa-droplet" style="color: #4dacff;"></i>';
         chartWrapper.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;"><h4 style="margin: 0; color: var(--text-primary);">${icon} Biểu đồ ${escapeHtml(device.name)}</h4><small style="color: var(--text-muted);">Dữ liệu History</small></div><canvas id="chart-${device.id}"></canvas>`;
         chartsContainer.appendChild(chartWrapper);
@@ -941,6 +939,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderEmptySensorCard(name) { if(!sensorContainer) return; const card = document.createElement('div'); card.className = 'card room-status-card widget-item'; card.setAttribute('data-room', 'all'); card.innerHTML = `<div class="room-info"><h2>${escapeHtml(name)}</h2><p class="humidity" style="color: var(--text-secondary);"><i class="fa-solid fa-link-slash"></i> Chưa kết nối</p></div><div class="temp-ring" style="border-color: var(--border-color);"><div class="temp-inner" style="color: var(--text-secondary);">--</div></div>`; sensorContainer.appendChild(card); }
+    
     function renderEmptyChart(name, iconClass, color) { if(!chartsContainer) return; const id = 'empty-chart-' + Math.random().toString(36).substr(2, 9); const chartWrapper = document.createElement('div'); chartWrapper.className = 'card widget-item'; chartWrapper.setAttribute('data-room', 'all'); chartWrapper.style = 'padding: 20px; background: var(--card-bg); border-radius: 12px; height: 100%;'; chartWrapper.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;"><h4 style="margin: 0; color: var(--text-secondary);"><i class="fa-solid ${iconClass}" style="color: ${color}; opacity: 0.5;"></i> Biểu đồ ${escapeHtml(name)} (N/A)</h4><small style="color: var(--text-secondary);">No Data</small></div><canvas id="${id}"></canvas>`; chartsContainer.appendChild(chartWrapper); new Chart(document.getElementById(id).getContext('2d'), { type: 'line', data: { labels: ['--:--', '--:--', '--:--', '--:--', '--:--'], datasets: [{ data: [0, 0, 0, 0, 0], borderColor: '#888', borderWidth: 1, pointRadius: 0 }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888' }, grid: { display: false } }, y: { ticks: { color: '#888' }, grid: { display: false }, min: 0, max: 100 } } } }); }
 
     function setupFilters() {
