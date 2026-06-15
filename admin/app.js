@@ -131,6 +131,26 @@ function getSpeedLevel(speed) {
 
 // Lưu tạm mode theo device_id vì API /devices/ hiện chưa chắc trả mode
 let fanModeMap = JSON.parse(localStorage.getItem("fanModeMap") || "{}");
+let deviceStatusOverrideMap = JSON.parse(localStorage.getItem("deviceStatusOverrideMap") || "{}");
+let fanSpeedMap = JSON.parse(localStorage.getItem("fanSpeedMap") || "{}");
+
+function saveDeviceStatusOverride(deviceId, status) {
+    deviceStatusOverrideMap[deviceId] = String(status).toUpperCase();
+    localStorage.setItem("deviceStatusOverrideMap", JSON.stringify(deviceStatusOverrideMap));
+}
+
+function getEffectiveStatus(device) {
+    return String(deviceStatusOverrideMap[device.id] || device.status || "OFF").toUpperCase();
+}
+
+function saveFanSpeedValue(deviceId, speed) {
+    fanSpeedMap[deviceId] = Number(speed);
+    localStorage.setItem("fanSpeedMap", JSON.stringify(fanSpeedMap));
+}
+
+function getEffectiveSpeed(device) {
+    return fanSpeedMap[device.id] ?? device.speed ?? 0;
+}
 
 function getFanMode(device) {
     return (device.mode || fanModeMap[device.id] || "manual").toLowerCase();
@@ -461,9 +481,9 @@ function renderControllers(controllers) {
 
     grid.innerHTML = controllers.map(d => {
         const icon = detectControllerIcon(d);
-        const isOn = String(d.status).toUpperCase() === "ON";
+        const isOn = getEffectiveStatus(d) === "ON";
         const fan  = isFanDevice(d);
-        const speedLv = fan ? getSpeedLevel(d.speed) : 0;
+        const speedLv = fan ? getSpeedLevel(getEffectiveSpeed(d)) : 0;
         const fanMode = fan ? getFanMode(d) : "manual";
         const isAutoMode = fanMode === "auto";
 
@@ -572,6 +592,15 @@ async function toggleDevice(deviceId, checkboxEl) {
         const card = checkboxEl.closest(".device-card");
         const stateLabel = card.querySelector(".state-label");
         const isOn = checkboxEl.checked;
+
+        saveDeviceStatusOverride(deviceId, isOn ? "ON" : "OFF");
+
+        const cached = allDevicesCache.find(d => d.id == deviceId);
+        if (cached) cached.status = isOn ? "ON" : "OFF";
+
+        const iconEl = card.querySelector(".card-icon");
+        if (iconEl) iconEl.classList.toggle("fan-spinning", isOn);
+
         stateLabel.classList.toggle("state-on", isOn);
         stateLabel.classList.toggle("state-off", !isOn);
         stateLabel.querySelector("span").innerText = isOn ? "BẬT" : "TẮT";
@@ -595,13 +624,31 @@ async function setFanSpeed(deviceId, speed, btnEl) {
         return;
     }
 
+    const card = btnEl.closest(".device-card");
+    const checkbox = card.querySelector(".toggle-switch input");
     const speedControl = btnEl.closest(".fan-speed-control");
     const allBtns = speedControl.querySelectorAll(".speed-btn");
 
-    // Disable tất cả nút trong lúc gọi API
     allBtns.forEach(b => b.disabled = true);
 
     try {
+        // Nếu UI đang tắt thì bật thật trước
+        if (checkbox && !checkbox.checked) {
+            const toggleRes = await fetch(`${API}/devices/${deviceId}/toggle?action=on`, {
+                method: "POST",
+                headers: authHeaders()
+            });
+
+            if (!toggleRes.ok) {
+                console.error("Auto toggle ON failed:", await toggleRes.text());
+                showToast("Không thể bật quạt trước khi chỉnh tốc độ", "error");
+                return;
+            }
+
+            checkbox.checked = true;
+        }
+
+        // Gọi API chỉnh tốc độ
         const res = await fetch(`${API}/devices/${deviceId}/speed?speed=${speed}`, {
             method: "POST",
             headers: authHeaders()
@@ -614,27 +661,32 @@ async function setFanSpeed(deviceId, speed, btnEl) {
             return;
         }
 
-        // Cập nhật UI: bỏ active cũ, thêm active mới
+        // Lưu FE override để polling 7s không kéo UI về OFF
+        saveDeviceStatusOverride(deviceId, "ON");
+        saveFanSpeedValue(deviceId, speed);
+
+        const cached = allDevicesCache.find(d => d.id == deviceId);
+        if (cached) {
+            cached.status = "ON";
+            cached.speed = speed;
+        }
+
+        // Cập nhật nút tốc độ
         allBtns.forEach(b => b.classList.remove("active", "low", "med", "high"));
         const levelClass = speed <= 40 ? "low" : speed <= 70 ? "med" : "high";
         btnEl.classList.add("active", levelClass);
 
+        // Cập nhật UI trạng thái
+        const stateLabel = card.querySelector(".state-label");
+        stateLabel.classList.remove("state-off");
+        stateLabel.classList.add("state-on");
+        stateLabel.querySelector("span").innerText = "BẬT";
+
+        const iconEl = card.querySelector(".card-icon");
+        if (iconEl) iconEl.classList.add("fan-spinning");
+
         const labels = { 33: "Nhỏ", 66: "Vừa", 100: "Lớn" };
         showToast(`Đã chỉnh quạt mức ${labels[speed] || speed}`, "success");
-
-        // Nếu quạt đang tắt → tự bật lên
-        const card = btnEl.closest(".device-card");
-        const checkbox = card.querySelector(".toggle-switch input");
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-            const stateLabel = card.querySelector(".state-label");
-            stateLabel.classList.remove("state-off");
-            stateLabel.classList.add("state-on");
-            stateLabel.querySelector("span").innerText = "BẬT";
-            // Bật icon quay
-            const iconEl = card.querySelector(".card-icon");
-            if (iconEl) iconEl.classList.add("fan-spinning");
-        }
 
     } catch (err) {
         console.error("setFanSpeed error:", err);
@@ -674,6 +726,15 @@ async function setFanMode(deviceId, mode, btnEl) {
                 : "Đã chuyển quạt sang chế độ Thủ công",
             "success"
         );
+        const card = btnEl.closest(".device-card");
+        const checkbox = card?.querySelector(".toggle-switch input");
+
+        if (checkbox && checkbox.checked) {
+            saveDeviceStatusOverride(deviceId, "ON");
+
+            const cached = allDevicesCache.find(d => d.id == deviceId);
+            if (cached) cached.status = "ON";
+        }
 
         await loadDevices();
 
@@ -1165,15 +1226,38 @@ const pages    = document.querySelectorAll('.page');
 const pageTitle = document.getElementById('page-title');
 
 navItems.forEach(item => {
-    item.addEventListener('click', function (e) {
+    item.addEventListener('click', async function (e) {
         e.preventDefault();
+
         navItems.forEach(nav => nav.classList.remove('active'));
         pages.forEach(p => p.classList.remove('active'));
+
         this.classList.add('active');
-        const targetId = "page-" + this.getAttribute('href').substring(1);
+
+        const pageName = this.getAttribute('href').substring(1);
+        const targetId = "page-" + pageName;
         const target = document.getElementById(targetId);
+
         if (target) target.classList.add('active');
         pageTitle.innerText = this.innerText.trim();
+
+        if (pageName === "scheduler") {
+            await loadScheduleDevices();
+            await loadSchedules();
+        }
+
+        if (pageName === "history") {
+            await fetchLogs();
+        }
+
+        if (pageName === "members") {
+            await loadMembers();
+        }
+
+        if (pageName === "reports") {
+            await loadReportSummary();
+            await loadReportChart();
+        }
     });
 });
 
@@ -1445,19 +1529,45 @@ function renderReportDevices(devices) {
         return;
     }
 
-    tbody.innerHTML = devices.map(d => `
-        <tr>
-            <td>${escapeHtml(d.name)}</td>
-            <td>${escapeHtml(d.type)}</td>
-            <td>
-                <span class="${String(d.status).toUpperCase() === 'ON' ? 'status-success' : 'status-error'}">
-                    ${String(d.status).toUpperCase()}
+    tbody.innerHTML = devices.map(d => {
+        const type = String(d.type || "").toLowerCase();
+        const isSensor = type === "sensor";
+        const status = String(d.status || "").toUpperCase();
+
+        let statusHtml = "";
+
+        if (isSensor) {
+            const hasValue = d.current_value !== null && d.current_value !== undefined;
+
+            statusHtml = hasValue
+                ? `<span class="status-success">ĐANG ĐỌC</span>`
+                : `<span class="status-warning">CHƯA CÓ DỮ LIỆU</span>`;
+        } else {
+            statusHtml = `
+                <span class="${status === 'ON' ? 'status-success' : 'status-error'}">
+                    ${status === "ON" ? "ON" : "OFF"}
                 </span>
-            </td>
-            <td>Tầng ${d.floor} - ${escapeHtml(d.room)}</td>
-            <td>${d.current_value ?? "--"}</td>
-        </tr>
-    `).join("");
+            `;
+        }
+
+        return `
+            <tr>
+                <td>${escapeHtml(d.name)}</td>
+
+                <td>
+                    ${isSensor ? "Cảm biến" : "Controller"}
+                </td>
+
+                <td>
+                    ${statusHtml}
+                </td>
+
+                <td>Tầng ${d.floor} - ${escapeHtml(d.room)}</td>
+
+                <td>${d.current_value ?? "--"}</td>
+            </tr>
+        `;
+    }).join("");
 }
 
 function renderReportAutomations(automations) {
@@ -3426,8 +3536,8 @@ window.addEventListener("load", async () => {
 
     // Sau khi devices đã load → scheduler + logs + members
     fetchLogs();
-    loadScheduleDevices();
-    loadSchedules();
+    //loadScheduleDevices();
+    //loadSchedules();
     loadMembers();
 });
 // Polling
