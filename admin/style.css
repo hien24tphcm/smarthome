@@ -1216,3 +1216,223 @@ body {
     color: #e5e7eb;
     border: 1px solid rgba(148, 163, 184, 0.35);
 }
+
+/* =========================================================
+   UI SIZE TUNING - Sidebar rộng hơn + Card lớn hơn
+   Dán đoạn này ở CUỐI FILE style.css
+========================================================= */
+
+/* Sidebar rộng hơn */
+.sidebar {
+    width: 300px;
+    padding: 28px 18px;
+}
+
+/* Logo to hơn */
+.logo {
+    font-size: 25px;
+    margin-bottom: 42px;
+}
+
+.logo i {
+    font-size: 28px;
+}
+
+/* Chữ module/sidebar to hơn */
+.nav-item {
+    font-size: 1.08rem;
+    padding: 15px 16px;
+    gap: 14px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+}
+
+.nav-item i {
+    width: 22px;
+    font-size: 1.08rem;
+}
+
+/* Header và content lệch theo sidebar mới cho thoáng */
+.top-header {
+    height: 76px;
+    padding: 0 36px;
+}
+
+.top-header h1 {
+    font-size: 1.55rem;
+}
+
+.content-area {
+    padding: 34px 38px;
+}
+
+/* Tiêu đề module trong trang to hơn */
+.section-header-row h2,
+.page h2 {
+    font-size: 1.32rem;
+}
+
+.badge {
+    font-size: 0.9rem;
+    padding: 5px 14px;
+}
+
+/* Grid card rộng hơn */
+.device-grid {
+    grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+    gap: 24px;
+}
+
+/* Card thiết bị to hơn */
+.device-card {
+    min-height: 205px;
+    padding: 22px;
+    border-radius: 20px;
+}
+
+/* Riêng card quạt cao hơn vì có mode + speed */
+.fan-card {
+    min-height: 310px;
+}
+
+/* Header trong card thoáng hơn */
+.card-header {
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+/* Icon trong card to hơn */
+.card-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    font-size: 1.65rem;
+}
+
+/* Tên thiết bị to hơn */
+.card-title {
+    font-size: 1.18rem;
+    font-weight: 700;
+}
+
+.card-feed {
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+.card-zone {
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
+/* Nút sửa/xóa trên card to hơn */
+.card-header .btn-secondary,
+.card-header .btn-trash {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 1rem;
+    padding: 0;
+}
+
+/* Sensor value to hơn */
+.sensor-value-big {
+    font-size: 2.75rem;
+    margin: 18px 0 8px;
+}
+
+.sensor-value-big .unit {
+    font-size: 1.15rem;
+}
+
+.sensor-meta {
+    font-size: 0.9rem;
+}
+
+/* Controller trạng thái to hơn */
+.controller-state {
+    margin-top: 18px;
+    padding: 15px;
+    border-radius: 14px;
+}
+
+.state-label {
+    font-size: 1.1rem;
+    gap: 10px;
+}
+
+/* Toggle to hơn */
+.toggle-switch {
+    width: 62px;
+    height: 34px;
+}
+
+.toggle-slider::before {
+    width: 28px;
+    height: 28px;
+    left: 3px;
+    bottom: 3px;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(28px);
+}
+
+/* Khu tốc độ quạt to và dễ bấm hơn */
+.fan-speed-control {
+    padding: 16px 0 10px;
+    margin-top: 10px;
+}
+
+.fan-mode-control {
+    margin-top: 18px;
+}
+
+.speed-label {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+}
+
+.speed-buttons {
+    gap: 10px;
+}
+
+.speed-btn {
+    padding: 11px 8px;
+    font-size: 0.92rem;
+    border-radius: 11px;
+}
+
+/* Toolbar cũng to hơn một chút cho đồng bộ */
+.toolbar {
+    padding: 18px 22px;
+    border-radius: 16px;
+}
+
+.toolbar-info {
+    font-size: 1rem;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
+    font-size: 1rem;
+    padding: 12px 20px;
+    border-radius: 12px;
+}
+
+/* Responsive: màn hình nhỏ thì sidebar đừng quá chiếm chỗ */
+@media (max-width: 900px) {
+    .sidebar {
+        width: 250px;
+    }
+
+    .nav-item {
+        font-size: 0.98rem;
+        padding: 12px 13px;
+    }
+
+    .device-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+}
