@@ -219,6 +219,7 @@ async function loadDevices() {
 // ============================================================
 // FETCH LOGS
 // ============================================================
+let allLogsCache = [];
 async function fetchLogs() {
     const tableBody = document.getElementById("log-table-body");
     if (!tableBody) return;
@@ -250,67 +251,9 @@ async function fetchLogs() {
         }
 
         const logs = await res.json();
+        allLogsCache = logs;
 
-        if (!logs.length) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="empty-state">
-                        Chưa có dữ liệu nhật ký
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tableBody.innerHTML = logs.map(log => {
-            const desc = log.description || "";
-            const type = (log.type || "").toLowerCase();
-
-            // ===== đoán tên thiết bị từ description =====
-            let deviceName = "--";
-
-            const controllerMatch = desc.match(/Controller[: ](.+?)(\.|$)/i);
-            const sensorMatch = desc.match(/Sensor[: ](.+?)(\.|$)/i);
-
-            if (controllerMatch) {
-                deviceName = controllerMatch[1];
-            } else if (sensorMatch) {
-                deviceName = sensorMatch[1];
-            }
-
-            // ===== đoán hành động =====
-            let action = "Cập nhật";
-
-            if (/turned on/i.test(desc)) action = "Bật";
-            else if (/turned off/i.test(desc)) action = "Tắt";
-            else if (/created/i.test(desc)) action = "Tạo mới";
-            else if (/deleted/i.test(desc)) action = "Xóa";
-            else if (/updated/i.test(desc)) action = "Cập nhật";
-
-            // ===== trạng thái =====
-            const isSuccess =
-                !/fail|error|lỗi/i.test(desc);
-
-            return `
-                <tr>
-                    <td>${formatTimestamp(log.timestamp)}</td>
-
-                    <td>${escapeHtml(deviceName)}</td>
-
-                    <td>${escapeHtml(action)}</td>
-
-                    <td>
-                        <span class="${
-                            isSuccess ? "status-success" : "status-error"
-                        }">
-                            ${isSuccess ? "Thành công" : "Lỗi"}
-                        </span>
-                    </td>
-
-                    <td>${escapeHtml(desc)}</td>
-                </tr>
-            `;
-        }).join("");
+        applyLogFilters();
 
     } catch (err) {
         console.error("fetchLogs error:", err);
@@ -323,6 +266,126 @@ async function fetchLogs() {
             </tr>
         `;
     }
+}
+function applyLogFilters() {
+    const typeFilter = document.getElementById("log-type-filter")?.value || "all";
+    const searchText = document.getElementById("log-search")?.value.trim().toLowerCase() || "";
+
+    let filteredLogs = [...allLogsCache];
+
+    if (typeFilter !== "all") {
+        filteredLogs = filteredLogs.filter(log => {
+            const desc = (log.description || "").toLowerCase();
+            const type = (log.type || "").toLowerCase();
+
+            if (typeFilter === "on") {
+                return /turned\s*['"]?on['"]?/i.test(desc) ||
+                       desc.includes(" on ") ||
+                       desc.includes("bật");
+            }
+
+            if (typeFilter === "off") {
+                return /turned\s*['"]?off['"]?/i.test(desc) ||
+                       desc.includes(" off ") ||
+                       desc.includes("tắt");
+            }
+
+            if (typeFilter === "created") {
+                return desc.includes("created") || desc.includes("create") || desc.includes("tạo");
+            }
+
+            if (typeFilter === "updated") {
+                return desc.includes("updated") ||
+                       desc.includes("set ") ||
+                       desc.includes("mode") ||
+                       desc.includes("speed") ||
+                       desc.includes("cập nhật");
+            }
+
+            if (typeFilter === "deleted") {
+                return desc.includes("deleted") || desc.includes("delete") || desc.includes("xóa") || desc.includes("xoá");
+            }
+
+            if (typeFilter === "error") {
+                return /fail|failed|error|lỗi/i.test(desc) || type.includes("error");
+            }
+
+            return true;
+        });
+    }
+
+    if (searchText) {
+        filteredLogs = filteredLogs.filter(log => {
+            const text = `
+                ${log.type || ""}
+                ${log.description || ""}
+                ${formatTimestamp(log.timestamp) || ""}
+            `.toLowerCase();
+
+            return text.includes(searchText);
+        });
+    }
+
+    renderLogs(filteredLogs);
+}
+
+function renderLogs(logs) {
+    const tableBody = document.getElementById("log-table-body");
+    if (!tableBody) return;
+
+    if (!logs.length) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-state">
+                    Không có nhật ký phù hợp với bộ lọc
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = logs.map(log => {
+        const desc = log.description || "";
+
+        let deviceName = "--";
+
+        const controllerMatch = desc.match(/Controller[: ](.+?)(\.|$)/i);
+        const sensorMatch = desc.match(/Sensor[: ](.+?)(\.|$)/i);
+
+        if (controllerMatch) {
+            deviceName = controllerMatch[1];
+        } else if (sensorMatch) {
+            deviceName = sensorMatch[1];
+        }
+
+        let action = "Cập nhật";
+
+        if (/turned\s*['"]?on['"]?/i.test(desc)) action = "Bật";
+        else if (/turned\s*['"]?off['"]?/i.test(desc)) action = "Tắt";
+        else if (/created/i.test(desc)) action = "Tạo mới";
+        else if (/deleted/i.test(desc)) action = "Xóa";
+        else if (/updated|set .*mode|set .*speed/i.test(desc)) action = "Cập nhật";
+
+        const isSuccess = !/fail|error|lỗi/i.test(desc);
+
+        return `
+            <tr>
+                <td>${formatTimestamp(log.timestamp)}</td>
+
+                <td>${escapeHtml(deviceName)}</td>
+
+                <td>${escapeHtml(action)}</td>
+
+                <td>
+                    <span class="${isSuccess ? "status-success" : "status-error"}">
+                        ${isSuccess ? "Thành công" : "Lỗi"}
+                    </span>
+                </td>
+
+                <td>${escapeHtml(desc)}</td>
+            </tr>
+        `;
+    }).join("");
 }
 
 function renderSensors(sensors) {
