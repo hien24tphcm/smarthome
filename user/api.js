@@ -943,11 +943,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderEmptyChart(name, iconClass, color) { if(!chartsContainer) return; const id = 'empty-chart-' + Math.random().toString(36).substr(2, 9); const chartWrapper = document.createElement('div'); chartWrapper.className = 'card widget-item'; chartWrapper.setAttribute('data-room', 'all'); chartWrapper.style = 'padding: 20px; background: var(--card-bg); border-radius: 12px; height: 100%;'; chartWrapper.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;"><h4 style="margin: 0; color: var(--text-secondary);"><i class="fa-solid ${iconClass}" style="color: ${color}; opacity: 0.5;"></i> Biểu đồ ${escapeHtml(name)} (N/A)</h4><small style="color: var(--text-secondary);">No Data</small></div><canvas id="${id}"></canvas>`; chartsContainer.appendChild(chartWrapper); new Chart(document.getElementById(id).getContext('2d'), { type: 'line', data: { labels: ['--:--', '--:--', '--:--', '--:--', '--:--'], datasets: [{ data: [0, 0, 0, 0, 0], borderColor: '#888', borderWidth: 1, pointRadius: 0 }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888' }, grid: { display: false } }, y: { ticks: { color: '#888' }, grid: { display: false }, min: 0, max: 100 } } } }); }
 
     function setupFilters() {
-        const filterBtns = document.querySelectorAll('.filter-btn'); const widgetItems = document.querySelectorAll('.widget-item');
+        const filterBtns = document.querySelectorAll('.filter-btn'); 
+        
         filterBtns.forEach(btn => {
             btn.onclick = () => {
-                filterBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active'); const filter = btn.dataset.filter;
-                widgetItems.forEach(item => { item.style.display = (filter === 'all' || item.dataset.room === filter) ? '' : 'none'; });
+                // 1. Đổi màu nút được chọn
+                filterBtns.forEach(b => b.classList.remove('active')); 
+                btn.classList.add('active'); 
+                const filter = btn.dataset.filter;
+                
+                const widgetItems = document.querySelectorAll('.widget-item');
+                
+                // 2. Lọc thiết bị: Ẩn/Hiện thẻ dựa trên dữ liệu (Tầng)
+                widgetItems.forEach(item => { 
+                    if (item.classList.contains('dynamic-empty-msg')) return;
+                    
+                    item.style.display = (filter === 'all' || item.dataset.room === filter) ? '' : 'none'; 
+                });
+
+                // 3. Đếm và xử lý phần CẢM BIẾN (Thông số môi trường)
+                if (sensorContainer) {
+                    let visibleSensors = 0;
+                    sensorContainer.querySelectorAll('.widget-item:not(.dynamic-empty-msg)').forEach(item => {
+                        if (item.style.display !== 'none') visibleSensors++;
+                    });
+
+                    const oldMsg = sensorContainer.querySelector('.dynamic-empty-msg');
+                    if (oldMsg) oldMsg.remove();
+                    if (visibleSensors === 0) {
+                        const emptyDiv = document.createElement('div');
+                        emptyDiv.className = 'dynamic-empty-msg';
+                        emptyDiv.style = 'grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-secondary); background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px dashed var(--border-color); width: 100%;';
+                        emptyDiv.innerHTML = '<i class="fa-solid fa-wind" style="font-size: 28px; opacity: 0.4; margin-bottom: 12px; display: block;"></i>Khu vực này chưa có thông số môi trường.';
+                        sensorContainer.appendChild(emptyDiv);
+                    }
+                }
+                if (controllerContainer) {
+                    let visibleCtrls = 0;
+                    controllerContainer.querySelectorAll('.widget-item:not(.dynamic-empty-msg)').forEach(item => {
+                        if (item.style.display !== 'none') visibleCtrls++;
+                    });
+
+                    const oldMsg = controllerContainer.querySelector('.dynamic-empty-msg');
+                    if (oldMsg) oldMsg.remove();
+                    if (visibleCtrls === 0) {
+                        const emptyDiv = document.createElement('div');
+                        emptyDiv.className = 'dynamic-empty-msg';
+                        emptyDiv.style = 'grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-secondary); background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px dashed var(--border-color); width: 100%;';
+                        emptyDiv.innerHTML = '<i class="fa-solid fa-plug-circle-xmark" style="font-size: 28px; opacity: 0.4; margin-bottom: 12px; display: block;"></i>Khu vực này chưa có thiết bị điều khiển.';
+                        controllerContainer.appendChild(emptyDiv);
+                    }
+                }
             };
         });
     }
